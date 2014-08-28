@@ -1,0 +1,3 @@
+#!/usr/bin/node
+
+// run the given command and return results in JSON

@@ -4,7 +4,8 @@
   "description": "System command output to JSON parser",
   "main": "syscmdparser.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node_modules/.bin/nodeunit test",
+    "build": "node_modules/.bin/uglifyjs syscmdparser.js -c \"evaluate=false\" -m --source-map syscmdparser-min.map -o syscmdparser-min.js"
   },
   "repository": {
     "type": "git",
@@ -14,12 +15,21 @@
     "JSON",
     "output",
     "parser",
-    "shell"
+    "shell",
+    "util"
   ],
   "author": "Anna-Kaisa Pietilainen <anna-kaisa.pietilainen@inria.fr>",
-  "license": "GNU AGPL v3.0",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/apietila/syscmdparser/issues"
   },
-  "homepage": "https://github.com/apietila/syscmdparser"
+  "homepage": "https://github.com/apietila/syscmdparser",
+  "dependencies" : {
+    "ipaddr.js" : "*",
+    "underscore" : "*"
+  }, 
+  "devDependencies": {
+    "uglify-js": "2.4.x",
+    "nodeunit": "*"
+  }
 }

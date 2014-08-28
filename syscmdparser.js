@@ -1,19 +1,25 @@
 /*
-   syscmdparser - system command output to JSON parser
-   Copyright (C) 2014 Anna-Kaisa Pietilainen <anna-kaisa.pietilainen@inria.fr>
+  The MIT License (MIT)
 
-   This program is free software: you can redistribute it and/or modify
-   it under the terms of the GNU Affero General Public License as published
-   by the Free Software Foundation, either version 3 of the License, or
-   (at your option) any later version.
+  Copyright (c) 2014 Anna-Kaisa Pietilainen <anna-kaisa.pietilainen@inria.fr>
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU Affero General Public License for more details.
-   
-   You should have received a copy of the GNU Affero General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 */
 
 "use strict";
@@ -35,6 +41,22 @@
 	exports.syscmdparser = syscmdparser;
     } else {
 	root.syscmdparser = syscmdparser;
+    }
+
+    var has_require = typeof require !== 'undefined';
+
+    // check for dependencies
+    var _ = root._;
+    if (typeof _ === 'undefined' ) {
+	if( has_require ) {
+	    _ = require('underscore')
+	} else 
+	    throw new Error('syscmdparser requires underscore, see http://underscorejs.org');
+    }
+    // optional dependency
+    var ipaddr = root.ipaddr;
+    if (typeof ipaddr === 'undefined' && has_require) {
+	ipaddr = require('ipaddr.js');
     }
 
     syscmdparser.noConflict = function() {
