@@ -21,19 +21,20 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  SOFTWARE.
 */
-
 "use strict";
 
 (function() {
     var root = this;
     var prevParser = root.syscmdparser;
 
+    // the module
     var syscmdparser = function(obj) {
 	if (obj instanceof syscmdparser) return obj;
 	if (!(this instanceof syscmdparser)) return new syscmdparser(obj);
 	this._wrapped = obj;
     };
 
+    // export the module
     if( typeof exports !== 'undefined' ) {
 	if( typeof module !== 'undefined' && module.exports ) {
 	    exports = module.exports = syscmdparser;
@@ -58,6 +59,63 @@
     if (typeof ipaddr === 'undefined' && has_require) {
 	ipaddr = require('ipaddr.js');
     }
+
+    //--------------------------------
+    // internal helpers
+
+    parseIfconfig = function(out, cmd, os) {
+    };
+
+    parseIpconfig = function(out, cmd, os) {
+    };
+
+    parseIp = function(out, cmd, os) {
+    };
+
+    //--------------------------------
+    // the main parser interface
+    syscmdparser.parse = function(error, stdout, stderr, cmd, os) {
+	if (!_.isArray(cmd))
+	    cmd = cmd.split(' ');
+
+	var res = {
+	    ts : Date.now(),
+	    cmd : cmd[0],
+	    cmdline : cmd.join(' '),
+	    os : os,
+	    stderr : (stderr ? stderr.trim() : "nothing in stderr"),
+	    stdout : (stdout ? stdout.trim() : "nothing in stdout")
+	};
+
+	if (error) {
+	    res.error = (error.code || error);
+	    return res;
+	}
+	stdout = stdout || "";
+
+	switch (cmd[0]) {
+	case "hostname":
+	    res.result = stdout;
+	    break;
+	case "ifconfig":
+	    res.result = parseIfconfig(stdout, cmd, os);
+	    break;
+	case "ipconfig":
+	    res.result = parseIpconfig(stdout, cmd, os);
+	    break;
+	case "ip":
+	    res.result = parseIp(stdout, cmd, os);
+	    break;
+	default:
+	    res.error = "unsupported cmd " + cmd[0];
+	    break;
+	};
+	return res;
+    };
+
+    syscmdparser.getSupported = function() {
+	return ["hostname","ifconfig","ipconfig","ip"];
+    };
 
     syscmdparser.noConflict = function() {
 	root.syscmdparser = prevParser;

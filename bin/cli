@@ -1,3 +1,27 @@
 #!/usr/bin/node
 
-// run the given command and return results in JSON
+// simple command line client to test out the parser
+
+var os = require('os');
+var fs = require('fs');
+var scp = require('../syscmdparser');
+var exec = require('child_process').exec;
+var args = process.argv.slice(2);
+
+if (args && args[0] === "--list") {
+    console.log("Supported system commands:");
+    console.log(JSON.stringify(scp.getSupported(), null, 4));
+    process.exit(0);
+} else if (args && args[0] === "--os") {
+    console.log(os.platform());
+    process.exit(0);
+} else if (args[0]) {
+    exec(args.join(" "), function (error, stdout, stderr) {
+	var res = scp.parse(error, stdout, stderr, args, os.platform());
+	console.log(JSON.stringify(res, null, 4));
+	process.exit(0);
+    });    
+} else {
+    console.log('Usage: node bin/cli <your command and args here>');
+    process.exit(0);
+}
