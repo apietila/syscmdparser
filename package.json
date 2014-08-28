@@ -1,0 +1,25 @@
+{
+  "name": "syscmdparser",
+  "version": "1.0.0",
+  "description": "System command output to JSON parser",
+  "main": "syscmdparser.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/apietila/syscmdparser.git"
+  },
+  "keywords": [
+    "JSON",
+    "output",
+    "parser",
+    "shell"
+  ],
+  "author": "Anna-Kaisa Pietilainen <anna-kaisa.pietilainen@inria.fr>",
+  "license": "GNU AGPL v3.0",
+  "bugs": {
+    "url": "https://github.com/apietila/syscmdparser/issues"
+  },
+  "homepage": "https://github.com/apietila/syscmdparser"
+}
