@@ -27,7 +27,7 @@
     var root = this;
     var prevParser = root.syscmdparser;
 
-    // the module
+    // the module object
     var syscmdparser = function(obj) {
 	if (obj instanceof syscmdparser) return obj;
 	if (!(this instanceof syscmdparser)) return new syscmdparser(obj);
@@ -54,6 +54,7 @@
 	} else 
 	    throw new Error('syscmdparser requires underscore, see http://underscorejs.org');
     }
+
     // optional dependency
     var ipaddr = root.ipaddr;
     if (typeof ipaddr === 'undefined' && has_require) {
@@ -63,20 +64,260 @@
     //--------------------------------
     // internal helpers
 
-    parseIfconfig = function(out, cmd, os) {
+    const winnt = "winnt";
+    const android = "android";
+    const linux = "linux";
+    const darwin = "darwin";
+
+    const parserfuncs = {};
+
+    parserfuncs["ifconfig"] = function(out, cmd, os) {
     };
 
-    parseIpconfig = function(out, cmd, os) {
+    parserfuncs["ipconfig"] = function(out, cmd, os) {
     };
 
-    parseIp = function(out, cmd, os) {
+    parserfuncs["ip"] = function(out, cmd, os) {
+    };
+
+    parserfuncs["iperf"] = function(out, cmd, os) {
+	var idx = _.indexOf(cmd, '-y');
+	if (idx < 0 || (cmd[idx+1].toLowerCase() !== 'j' &&
+			cmd[idx+1].toLowerCase() !== 'c')) 
+	{
+	    throw new Error("syscmdparser iperf -Y [j|c] required");
+	}
+
+	// reporting styles
+	var iscsv = (cmd[idx+1].toLowerCase() === 'c');
+
+	var res = {
+	    header : {                 // configuration
+		test : {
+		    proto : "tcp",         // -u
+		    duration : 10,         // -t
+		    bytes : undefined,     // -n
+		    rate : undefined,      // -b
+		    mode : "normal"        // normal, tradeoff, reverse, dual
+		},
+		role : undefined,          // client or server
+		local_host : undefined,
+		remote_host : undefined
+	    },
+	    local : {                  // local received and/or sent data
+		recv : undefined,
+		send : undefined
+	    },
+	    remote : {                 // remote received and/or sent data
+		recv : undefined,
+		send : undefined
+	    }
+	};
+
+	// fill some of the header with the cmd params
+	var idx = 1;
+	while (idx < cmd.length) {
+	    switch (cmd[idx]) {
+	    case "-c": 
+		res.header.role = "client";
+		idx += 1;
+		break;
+	    case "-s": 
+		res.header.role = "server";
+		idx += 1;
+		break;
+	    case "-t": 
+		res.header.test.duration = parseInt(cmd[idx+1]);
+		idx += 2;
+		break;
+	    case "-b": 
+		res.header.test.rate = cmd[idx+1];
+		idx += 2;
+		break;
+	    case "-n": 
+		res.header.test.bytes = cmd[idx+1];
+		idx += 2;
+		break;
+	    case "-u": 
+		res.header.test.proto = "udp";
+		idx += 1;
+		break;
+	    case "-d": 
+		res.header.test.mode = "dual";
+		idx += 1;
+		break;
+	    case "-r": 
+		res.header.test.mode = "tradeoff";
+		idx += 1;
+		break;
+	    case "-E": 
+		res.header.test.mode = "reverse";
+		idx += 1;
+		break;
+	    default:
+		idx += 1;
+		break;
+	    }
+	}
+
+	var gettimestamp = function(s) {
+	    if (s.length<14) {
+		return { timein : s, timesec : parseInt(s) };
+	    } else {
+		var d = new Date(parseInt(s.substring(0,4)), // year
+				 parseInt(s.substring(4,6)), // month
+				 parseInt(s.substring(6,8)), // date
+				 parseInt(s.substring(8,10)), // hour
+				 parseInt(s.substring(10,12)), // minute
+				 parseInt(s.substring(12,14)), // second
+				 0); // ms
+	    }
+	    return {time : d.toJSON(),
+		    timemsec : d.getTime(),
+		    timein : s};
+	};
+
+	var lines = out.split('\n');
+
+	if (iscsv) {
+	    var tmp = lines[0].split(',');
+	    res.header.local_host = tmp[1];
+	    res.header.remote_host = tmp[3];
+
+	    var obj = {
+		local_port : parseInt(tmp[2]),
+		remote_port : parseInt(tmp[4]),
+		intervals : [],
+		total : undefined
+	    }
+
+	    for (var i = 0; i<lines.length; i++) {		    
+		tmp = lines[i].split(',');
+		var iobj = {
+		    timestamp : gettimestamp(tmp[0]),
+		    startTime : parseFloat(tmp[6].split('-')[0]),
+		    endTime : parseFloat(tmp[6].split('-')[1]),
+		    bytes : parseFloat(tmp[7]),
+		    rate : parseFloat(tmp[8]),
+		}
+
+		if (tmp.length > 10) {
+		    _.extend(iobj, {
+    			jitter : parseFloat(tmp[9]),
+    			errorCnt : parseInt(tmp[10]),
+    			dgramCnt : parseInt(tmp[11]),
+    			errorRate : parseFloat(tmp[12]),
+    			outOfOrder : parseFloat(tmp[13])
+		    });
+		}
+		// KB
+		iobj.bytesK = iobj.bytes / 1024.0;
+		// MB
+		iobj.bytesM = iobj.bytes / 1024.0 / 1024.0;
+		// bytes / s
+		iobj.rate = iobj.bytes / (iobj.endTime - iobj.startTime);
+		// bits / s
+		iobj.ratebit = iobj.rate * 8.0;
+		// Kbit / s
+		iobj.rateKbit = iobj.ratebit *  (1.0 / 1000 );
+		// Mbit / s
+		iobj.rateMbit = iobj.ratebit *  (1.0 / 1000 / 1000);
+		
+		var local_port = parseInt(tmp[2]);
+		var remote_port = parseInt(tmp[4]);
+		
+		if (local_port !== obj.local_port || 
+		    remote_port !== obj.remote_port) 
+		{
+		    obj.total = obj.intervals.pop();
+		    if (res.header.role === "client") {
+			if (!res.local.send && 
+			    res.header.test.mode !== "reverse") {
+			    // client send report (except -E)
+			    res.local.send = obj;
+			} else if (local_port === obj.remote_port &&
+				   remote_port === obj.local_port) 
+			{
+			    // server side recv report
+			    res.remote.recv = obj;
+			} else {
+			    // client recv report (-E, -d or -r)
+			    res.local.recv = obj;
+			}
+		    } else {
+			if (!res.local.recv && 
+			    res.hearder.test.mode !== "reverse") {
+			    // server recv report (except -E)
+			    res.local.recv = obj;
+			} else if (!res.local.send) {
+			    // server send report (-E, -d or -r)
+			    res.local.send = obj;
+			} else {
+			    // remote side recv report (-u and -E, -d or -r)
+			    res.remote.recv = obj;
+			}
+		    }
+		    // reset
+		    obj = {
+			local_port : local_port,
+			remote_port : remote_port,
+			intervals : [],
+			total : undefined
+		    }
+		}
+		obj.intervals.push(iobj);
+	    }
+
+	    // handle last
+	    obj.total = obj.intervals.pop();
+	    if (res.header.role === "client") {
+		if (!res.local.send && res.header.test.mode !== "reverse") {
+		    // client send report (except -E)
+		    res.local.send = obj;
+		} else if (res.header.test.mode === "normal") {
+		    // server side recv report
+		    res.remote.recv = obj;
+		} else {
+		    // client recv report (-E, -d or -r)
+		    res.local.recv = obj;
+		}
+	    } else {
+		if (!res.local.recv && res.header.test.mode !== "reverse") {
+		    // server recv report (except -E)
+		    res.local.recv = obj;
+		} else if (!res.local.send) {
+		    // server send report (-E, -d or -r)
+		    res.local.send = obj;
+		} else {
+		    // remote side recv report (-u and -E, -d or -r)
+		    res.remote.recv = obj;
+		}
+	    }
+	} else { // json
+	}
+
+	return res;
     };
 
     //--------------------------------
-    // the main parser interface
+    // public API
+
+    /** Parse output (and errors) from the given system command run on
+     *  the given os.
+     */
     syscmdparser.parse = function(error, stdout, stderr, cmd, os) {
+	if (!cmd || !os)
+	    throw new Error("missing command or os");
+	if (!isOSSupported(os))
+	    throw new Error("syscmdparser does not yet support '" + 
+			    os + "' OS");
+
 	if (!_.isArray(cmd))
 	    cmd = cmd.split(' ');
+
+	if (!isCmdSupported(cmd[0]))
+	    throw new Error("syscmdparser does not yet support '" + 
+			    cmd[0] + "' command");
 
 	var res = {
 	    ts : Date.now(),
@@ -84,39 +325,44 @@
 	    cmdline : cmd.join(' '),
 	    os : os,
 	    stderr : (stderr ? stderr.trim() : "nothing in stderr"),
-	    stdout : (stdout ? stdout.trim() : "nothing in stdout")
+	    stdout : (stdout ? stdout.trim() : "nothing in stdout"),
+	    result : undefined
 	};
 
 	if (error) {
 	    res.error = (error.code || error);
-	    return res;
+	} else {
+	    stdout = (stdout ? stdout.trim() : "");
+	    res.result = parserfuncs[cmd[0]](stdout, cmd, os);
 	}
-	stdout = stdout || "";
 
-	switch (cmd[0]) {
-	case "hostname":
-	    res.result = stdout;
-	    break;
-	case "ifconfig":
-	    res.result = parseIfconfig(stdout, cmd, os);
-	    break;
-	case "ipconfig":
-	    res.result = parseIpconfig(stdout, cmd, os);
-	    break;
-	case "ip":
-	    res.result = parseIp(stdout, cmd, os);
-	    break;
-	default:
-	    res.error = "unsupported cmd " + cmd[0];
-	    break;
-	};
 	return res;
     };
 
-    syscmdparser.getSupported = function() {
-	return ["hostname","ifconfig","ipconfig","ip"];
+    /** @return List of supported system commands. */
+    syscmdparser.getSupportedCmds = function() {
+	return _.keys(parserfuncs);
     };
 
+    /** @return True if we know how to parse the cmd, else false. */
+    var isCmdSupported = syscmdparser.isCmdSupported = function(cmd) {
+	return (parserfuncs[cmd] && _.isFunction(parserfuncs[cmd]));
+    };
+
+    /** @return List of supported OS platforms. */
+    syscmdparser.getSupportedOSs = function() {
+	return [winnt,android,linux,darwin];
+    };
+
+    /** @return True if we support this OS, else false. */
+    var isOSSupported = syscmdparser.isOSSupported = function(os) {
+	return (os === winnt || 
+		os === android || 
+		os === linux || 
+		os === darwin);
+    };
+
+    /** @return Get a no-conflict instance of the module. */
     syscmdparser.noConflict = function() {
 	root.syscmdparser = prevParser;
 	return syscmdparser;
