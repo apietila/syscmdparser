@@ -136,6 +136,30 @@
 		    res.nameservers.push(line[1]);
 	    }
 	    break;
+	case "/proc/net/netstat":
+	    var g = undefined;
+	    var h = undefined;
+	    for (var i = 0; i < lines.length; i++) {
+		if (lines[i].indexOf("#") === 0 || lines[i].length <= 0)
+		    continue;
+
+		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
+		if (!g || g !== line[0]) {
+		    // header line
+		    g = line[0];
+		    h = line.splice(1);
+		} else {
+		    // value line
+		    var vals = _.map(line.splice(1), parseInt);
+		    g = g.replace(/:/gi,'');
+		    res[g] = {}
+		    _.each(h, function(v,idx) {
+			res[g][v] = vals[idx];
+		    });
+		    g = undefined;
+		}
+	    }
+	    break;
 	default:
 	    throw new Error("syscmdparser does not support 'cat " + cmd[1] + "'");
 	    break;
@@ -193,7 +217,7 @@
 		});
 	    }
 	    break;
-	case winnt:
+	case winnt: // FIXME
 	    break;
 	}
 	return res;
