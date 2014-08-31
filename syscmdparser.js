@@ -21,7 +21,7 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  SOFTWARE.
 */
-"use strict";
+//"use strict"; // disabled for now because of some const defs (only avail in harmony)
 
 (function() {
     var root = this;
@@ -60,9 +60,41 @@
     if (typeof ipaddr === 'undefined' && has_require) {
 	ipaddr = require('ipaddr.js');
     }
+    
+    // min/max/mean/median/std_dev/variance of an array or null if x is empty
+    var describe = function(x) {    
+        if (x.length === 0) return null;
+
+	var res = {};
+	var s = 0;
+        for (var i = 0; i < x.length; i++) {
+            if (x[i] < res.min || res.min === undefined) res.min = x[i];
+            if (x[i] > res.max || res.max === undefined) res.max = x[i];
+	    s += x[i];
+        }
+        res.mean = s / x.length;
+
+	var sumdev = 0;
+        for (var i = 0; i < x.length; i++) {
+            sumdev += (Math.pow(x[i] - res.mean, 2));
+	}
+	res.variance = sumdev / x.length;
+	res.std_dev = Math.sqrt(res.variance);
+
+        var sorted = x.slice().sort();
+        if (sorted.length % 2 === 1) {
+            res.median = sorted[(sorted.length - 1) / 2];
+        } else {
+            var a = sorted[(sorted.length / 2) - 1];
+            var b = sorted[(sorted.length / 2)];
+            res.median = (a + b) / 2;
+        }
+
+	return res;
+    }
 
     //--------------------------------
-    // internal helpers
+    // parsers
 
     const winnt = "winnt";
     const android = "android";
@@ -70,6 +102,8 @@
     const darwin = "darwin";
 
     const parserfuncs = {};
+
+    // -- configs --
 
     parserfuncs["hostname"] = function(out, cmd, os) {
 	return (out ? out.trim() : "unknown");
@@ -82,6 +116,149 @@
     };
 
     parserfuncs["ip"] = function(out, cmd, os) {
+    };
+
+    // -- tools --
+
+    parserfuncs["ping"] = function(out, cmd, os) {
+	var lines = (out ? out.trim() : "").split("\n");
+	var res = {
+	    dst: cmd[cmd.length-1],
+	    dst_ip : undefined,      // resolved IP
+	    count : 0,               // -c
+	    lost : 0,                // lost pkts
+	    bytes : 0,              // -b or default
+	    rtt : [],                // results
+	    stats : undefined        // basic stats
+	};
+
+	switch (os) {
+	case linux:
+	case android:
+	case darwin:
+	    var idx = 0;
+	    while (idx < cmd.length) {
+		switch (cmd[idx]) {
+		case "-c": 
+		    res.count = parseInt(cmd[idx+1]);
+		    idx += 2;
+		    break;
+		default:
+		    idx += 1;
+		    break;
+		}
+	    }
+
+
+	    for (var i = 0; i < lines.length; i++) {	    
+		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
+
+		if (line[0] === 'PING') {
+		    res.dst_ip = line[2].replace(/\(|\)|:/gi, '');
+		    res.bytes = parseInt(line[3])
+		} else if (line[1] === 'bytes') {
+		    for (var j = 2; j < line.length; j++) {
+			if (line[j].indexOf('time=') === 0) {
+			    var tmp = line[j].split('=');
+			    res.rtt.push(parseFloat(tmp[1]));
+			}
+		    }
+		}
+	    }
+	    res.lost = res.count - res.rtt.length;
+	break;
+
+	case winnt:
+	    if (lines.length > 1) {
+		for (var i = 0; i < lines.length; i++) {
+		    var line = lines[i].trim().replace(/\s+/g, ' ');
+		    if (i == 0) {
+			var s = line.split(' ');
+			ping.domain = s[1];
+			ping.ip = s[1];
+			if (s[2].indexOf('[')>=0) {
+			    ping.ip = s[2].replace(/[\[\]]/gi, '');
+			    if (ping.ip == "::1")
+				ping.ip = "127.0.0.1"
+			}
+
+		    } else if (line.indexOf("Reply from")>=0) {
+			var s = line.split(' ');
+
+			var p = new Ping();
+			if (s[2] === "::1:") {
+			    p.ip = '127.0.0.1'
+			    p.domain = 'localhost'
+			} else {
+			    p.ip = s[2].replace(/[\[\]:]/gi, '');
+			    p.domain = p.ip;
+			}
+
+			for (var j = 3; j<s.length; j++) {
+			    if (s[j].indexOf('=')>0) {
+				var tmp = s[j].trim().split('=');
+				p[tmp[0].toLowerCase()] = parseFloat(tmp[1].replace(/ms/,''));
+			    } else if (s[j].indexOf('<')>=0) {
+				var tmp = s[j].trim().split('<');
+				p[tmp[0].toLowerCase()] = parseFloat(tmp[1].replace(/ms/,''));
+			    }
+			};
+
+			ping.pings.push(p);
+
+		    } else if (line.indexOf("Packets: Sent =")>=0) {
+			var s = line.split(',');
+
+			var sent = s[0].trim().split(' ')[3];
+			var received = s[1].trim().split(' ')[2];
+			var lost = s[2].trim().split('%')[0].split("(")[1];
+			ping.stats.packets.sent = parseInt(sent);
+			ping.stats.packets.received = parseInt(received);
+			ping.stats.packets.lost = ping.stats.packets.sent - ping.stats.packets.received;
+			ping.stats.packets.lossrate = 100.0;
+			ping.stats.packets.succrate = 0.0;
+			if (sent>0) {
+			    ping.stats.packets.lossrate = ping.stats.packets.lost*100.0/ping.stats.packets.sent;
+			    ping.stats.packets.succrate = ping.stats.packets.received*100.0/ping.stats.packets.sent;
+			}
+		    } else if (line.indexOf("Minimum =")>=0) {
+			var s = line.split(',');
+
+			var min = s[0].split('=')[1].split('ms')[0].trim();
+			var max = s[1].split('=')[1].split('ms')[0].trim();
+			var avg = s[2].split('=')[1].split('ms')[0].trim();
+			var mdev = 0;
+
+			ping.stats.rtt.min = parseFloat(min);
+			ping.stats.rtt.max = parseFloat(max);
+			ping.stats.rtt.avg = parseFloat(avg);
+			ping.stats.rtt.mdev = parseFloat(mdev);
+		    }
+		}
+	    } else {
+		ping = {error: lines[0]};
+	    }
+	    break;
+	}
+
+	// count stats
+	res.stats = describe(res.rtt);
+	return res;
+    };
+
+    parserfuncs["fping"] = function(out, cmd, os) {
+	var lines = (out ? out.trim() : "").split("\n");
+	var res = {
+	    dst: cmd[cmd.length-1],
+	    count : 0,
+	    lost : 0,
+	    bytes : 64,
+	    pkts : {},        // seq -> {rtt : x, ip : x }
+	    stats : undefined
+	};
+
+	
+	return res;
     };
 
     parserfuncs["traceroute"] = function(out, cmd, os) {

@@ -2,6 +2,7 @@
 var exec = require('child_process').exec;
 var os = require('os').platform();
 var scp = require('../syscmdparser');
+var _ = require('underscore');
 
 var runcmd = function(cmd, callback) {
     exec(cmd, function (error, stdout, stderr) {
@@ -12,8 +13,8 @@ var runcmd = function(cmd, callback) {
 exports.testHostname = function(test) {
     test.expect(2);
     runcmd("hostname", function(o) {
-	test.ok(!o.error, "returns no error");
-	test.ok(require('os').hostname() == o.hostname, "return value ok");
+	test.ok(o.error===undefined, "returns no error");
+	test.ok(require('os').hostname() === o.result, "return value ok " + o.result);
 	test.done();
     });
 };
