@@ -44,3 +44,17 @@ exports.testPing = function(test) {
 	test.done();
     });
 };
+
+
+exports.testFping = function(test) {
+    test.expect(6);
+    runcmd("fping -C 5 www.google.com", function(o) {
+	test.ok(!o.error, "returns no error");
+	test.ok(o.result.dst === "www.google.com", "dst ok");
+	test.ok(o.result.count === 5, "count ok");
+	test.ok(o.result.bytes === 56, "bytes ok");
+	test.ok(o.result.rtt.length === o.result.count - o.result.lost, "ok rtt len");
+	test.ok(o.result.stats, "stats exists");
+	test.done();
+    });
+};

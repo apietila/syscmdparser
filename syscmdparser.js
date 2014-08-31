@@ -166,8 +166,7 @@
 		}
 	    }
 	    res.lost = res.count - res.rtt.length;
-	break;
-
+	    break;
 	case winnt:
 	    if (lines.length > 1) {
 		for (var i = 0; i < lines.length; i++) {
@@ -247,17 +246,47 @@
     };
 
     parserfuncs["fping"] = function(out, cmd, os) {
-	var lines = (out ? out.trim() : "").split("\n");
+	if (!_.contains(cmd, "-C")) { 
+	    throw new Error("syscmdparser fping -C required");
+	};
+	console.log(out);
+
 	var res = {
 	    dst: cmd[cmd.length-1],
-	    count : 0,
-	    lost : 0,
-	    bytes : 64,
-	    pkts : {},        // seq -> {rtt : x, ip : x }
-	    stats : undefined
+	    count : 0,               // -C
+	    lost : 0,                // lost pkts
+	    bytes : 56,              // -b or default
+	    rtt : [],                // results
+	    stats : undefined        // basic stats
 	};
 
-	
+	var idx = 0;
+	while (idx < cmd.length) {
+	    switch (cmd[idx]) {
+	    case "-C": 
+		res.count = parseInt(cmd[idx+1]);
+		idx += 2;
+		break;
+	    case "-b": 
+		res.bytes = parseInt(cmd[idx+1]);
+		idx += 2;
+		break;
+	    default:
+		idx += 1;
+		break;
+	    }
+	}
+
+	var lines = (out ? out.trim() : "").split("\n");
+	for (var i = 0; i < lines.length; i++) {	    
+	    var line = (lines[i] ? lines[i].trim() : "").replace(/\s+/g, ' ').split(' ');
+	    if (/\d+\.?\d*/.test(line[5])) {
+		res.rtt.push(parseFloat(line[5]));
+	    }
+	}
+
+	// count stats
+	res.stats = describe(res.rtt);
 	return res;
     };
 
