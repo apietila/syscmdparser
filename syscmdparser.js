@@ -137,6 +137,7 @@
 	    }
 	    break;
 	case "/proc/net/netstat":
+	case "/proc/net/snmp":
 	    var g = undefined;
 	    var h = undefined;
 	    for (var i = 0; i < lines.length; i++) {
@@ -153,7 +154,7 @@
 		    g = g.replace(/:/gi,'');
 		    res[g] = {}
 		    _.each(h, function(key,idx) {
-			res[g][key] = parseFloat(line[idx+1]);
+			res[g][key] = parseInt(line[idx+1]);
 		    });
 		    g = undefined;
 		}
