@@ -106,7 +106,41 @@
     // -- configs --
 
     parserfuncs["hostname"] = function(out, cmd, os) {
-	return (out ? out.trim() : "unknown");
+	return (out ? out.trim() : "");
+    };
+
+    parserfuncs["getprop"] = function(out, cmd, os) {
+	if (os === android)
+	    return (out ? out.trim() : "");
+	else
+	    throw new Error("syscmdparser getprop not available on '" + os + "'");
+    };
+
+    parserfuncs["cat"] = function(out, cmd, os) {
+	var lines = (out ? out.trim() : "").split("\n");
+
+	var res = { srcfile : cmd[1] };
+
+	switch (cmd[1]) {
+	case "/etc/resolv.conf":
+	    res.nameservers = [];
+	    for (var i = 0; i < lines.length; i++) {
+		if (lines[i].indexOf("#") === 0 || lines[i].length <= 0) 
+		    continue;
+		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
+		if (line[0] == "domain") 
+		    res.domain = line.splice(1);
+		else if (line[0] == "search") 
+		    res.search = line.splice(1);
+		else if (line[0] == "nameserver") 
+		    res.nameservers.push(line[1]);
+	    }
+	    break;
+	default:
+	    throw new Error("syscmdparser does not support 'cat " + cmd[1] + "'");
+	    break;
+	}
+	return res;
     };
 
     parserfuncs["ifconfig"] = function(out, cmd, os) {
@@ -728,7 +762,7 @@
      */
     syscmdparser.parse = function(error, stdout, stderr, cmd, os) {
 	if (!cmd || !os)
-	    throw new Error("missing command or os");
+	    throw new Error("syscmdparser missing command or os");
 	if (!isOSSupported(os))
 	    throw new Error("syscmdparser does not yet support '" + 
 			    os + "' OS");
