@@ -180,7 +180,7 @@
 
 	case "/proc/net/dev":
 	    res.ifaces = {};
-	    for (var i = 0; i < lines.length && wifi.signal==null; i++) {
+	    for (var i = 0; i < lines.length; i++) {
 		if (lines[i].indexOf("|") >= 0 || lines[i].length <= 0)
 		    continue;
 
