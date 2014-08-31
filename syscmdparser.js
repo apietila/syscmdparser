@@ -150,11 +150,10 @@
 		    h = line.splice(1);
 		} else {
 		    // value line
-		    var vals = _.map(line.splice(1), parseInt);
 		    g = g.replace(/:/gi,'');
 		    res[g] = {}
-		    _.each(h, function(v,idx) {
-			res[g][v] = vals[idx];
+		    _.each(h, function(key,idx) {
+			res[g][key] = parseFloat(line[idx+1]);
 		    });
 		    g = undefined;
 		}
