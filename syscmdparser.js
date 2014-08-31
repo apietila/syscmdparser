@@ -117,10 +117,9 @@
     };
 
     parserfuncs["cat"] = function(out, cmd, os) {
-	var lines = (out ? out.trim() : "").split("\n");
-
 	var res = { srcfile : cmd[1] };
 
+	var lines = (out ? out.trim() : "").split("\n");
 	switch (cmd[1]) {
 	case "/etc/resolv.conf":
 	    res.nameservers = [];
@@ -135,6 +134,15 @@
 		else if (line[0] == "nameserver") 
 		    res.nameservers.push(line[1]);
 	    }
+	    break;
+	case "/proc/net/wireless":
+	    res.todo = true;
+	    break;
+	case "/proc/net/tcp":
+	case "/proc/net/tcp6":
+	case "/proc/net/udp":
+	case "/proc/net/udp6":
+	    res.todo = true;
 	    break;
 	case "/proc/net/netstat":
 	case "/proc/net/snmp":
@@ -151,7 +159,7 @@
 		    h = line.splice(1);
 		} else {
 		    // value line
-		    g = g.replace(/:/gi,'');
+		    g = g.replace(/:/gi,'').toLowerCase();
 		    res[g] = {}
 		    _.each(h, function(key,idx) {
 			res[g][key] = parseInt(line[idx+1]);
