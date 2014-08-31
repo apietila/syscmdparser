@@ -117,8 +117,8 @@
 		    continue;
 
 		var ent = str.replace(/\s+/g,' ').replace(/\sms/g,'').split(' ');
-		var dre = new RegExp(/^\d{1,2} /); // <id> <host> ..
-		if (dre.test(str)) {
+
+		if (/^\d{1,2} /.test(str)) {
 		    if (currhopid>0) {
 			res.hops[currhopid] = currhop;
 		    }
@@ -132,11 +132,18 @@
 		} else {
 		    var ip = ent[1].replace(/\(|\)/gi, '');
 		    currhop[ip] = {hostname : ent[0], rtt : [], missed : 0};
-		    for (var k = 2; k < ent.length; k++) {
-			if (ent[k] === '*') {
+		    var idx = 2;
+		    while (idx < ent.length) {
+			if (ent[idx] === '*') {
 			    currhop[ip].missed += 1;
+			    idx += 1;
+			} else if (/\(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\)/.test(ent[idx+1])) {
+			    ip = ent[idx+1].replace(/\(|\)/gi, '');
+			    currhop[ip] = {hostname : ent[idx], rtt : [], missed : 0};
+			    idx += 2;
 			} else {
-			    currhop[ip].rtt.push(parseFloat(ent[k]));
+			    currhop[ip].rtt.push(parseFloat(ent[idx]));
+			    idx += 1;
 			}
 		    }
 		}
