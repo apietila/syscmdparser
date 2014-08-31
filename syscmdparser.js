@@ -815,14 +815,19 @@
 
 	if (!_.isArray(cmd))
 	    cmd = cmd.split(' ');
+	var prog = cmd[0];
+	if (prog.indexOf('\\')>=0)
+	    prog = prog.split('\\').splice(-1)[0]
+	if (prog.indexOf('/')>=0)
+	    prog = prog.split('/').splice(-1)[0]
 
-	if (!isCmdSupported(cmd[0]))
+	if (!isCmdSupported(prog))
 	    throw new Error("syscmdparser does not yet support '" + 
 			    cmd[0] + "' command");
 
 	var res = {
 	    ts : Date.now(),
-	    cmd : cmd[0],
+	    cmd : prog,
 	    cmdline : cmd.join(' '),
 	    os : os,
 	    stderr : (stderr ? stderr.trim() : ""),
@@ -834,9 +839,9 @@
 	    res.error = (error.code || error);
 
 	    // some exceptions that provide usefull output even on error
-	    if (cmd[0] === 'ping' && res.error == 2) {
+	    if (prog === 'ping' && res.error == 2) {
 		res.error = undefined;
-	    } else if (cmd[0] === 'fping' && res.error == 1) {
+	    } else if (prog === 'fping' && res.error == 1) {
 		res.error = undefined;
 		stdout = stderr;
 	    }
@@ -844,7 +849,7 @@
 
 	if (!res.error) {
 	    stdout = (stdout ? stdout.trim() : "");
-	    res.result = parserfuncs[cmd[0]](stdout, cmd, os);
+	    res.result = parserfuncs[prog](stdout, cmd, os);
 	}
 
 	return res;
