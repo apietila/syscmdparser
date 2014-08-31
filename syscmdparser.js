@@ -190,7 +190,7 @@
 		    case 'destination':
 		    case 'gateway':
 		    case 'mask':
-			o[key] = ip4(line[idx]);
+			o[key] = ip4(parseInt(line[idx],16));
 			break;
 		    case 'iface':
 		    case 'flags':
