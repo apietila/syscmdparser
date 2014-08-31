@@ -58,3 +58,26 @@ exports.testFping = function(test) {
 	test.done();
     });
 };
+
+exports.testPingEx = function(test) {
+    test.expect(4);
+    runcmd("ping -c 1 -m 1 www.google.com", function(o) {
+	test.ok(!o.error, "returns no error");
+	test.ok(o.result.ttl === 1, "ttl ok");
+	test.ok(!o.result.stats, "no stats");
+	test.ok(o.result.time_exceeded_from, "exceeded from");
+	test.done();
+    });
+};
+
+
+exports.testFpingEx = function(test) {
+    test.expect(4);
+    runcmd("fping -C 1 -H 1 www.google.com", function(o) {
+	test.ok(!o.error, "returns no error");
+	test.ok(o.result.ttl === 1, "ttl ok");
+	test.ok(!o.result.stats, "no stats");
+	test.ok(o.result.time_exceeded_from, "exceeded from");
+	test.done();
+    });
+};

@@ -155,8 +155,6 @@
 		}
 	    }
 
-	    console.log(out);
-
 	    for (var i = 0; i < lines.length; i++) {	    
 		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
 		if (lines[i].toLowerCase().indexOf('time to live exceeded')>=0) {
@@ -176,6 +174,7 @@
 	    }
 	    res.lost = res.count - res.rtt.length;
 	    break;
+
 	case winnt:
 	    if (lines.length > 1) {
 		for (var i = 0; i < lines.length; i++) {
