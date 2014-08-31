@@ -71,6 +71,10 @@
 
     const parserfuncs = {};
 
+    parserfuncs["hostname"] = function(out, cmd, os) {
+	return (out ? out.trim() : "unknown");
+    };
+
     parserfuncs["ifconfig"] = function(out, cmd, os) {
     };
 
@@ -78,6 +82,183 @@
     };
 
     parserfuncs["ip"] = function(out, cmd, os) {
+    };
+
+    parserfuncs["traceroute"] = function(out, cmd, os) {
+	var lines = (out ? out.trim() : "").split("\n");
+	var res = {
+	    dst: cmd[cmd.length-1],
+	    nqueries : 3,
+	    hops: {},        // dst -> ip -> { hostname : val, rtt : [] };
+	};
+
+	switch (os) {
+	case linux:
+	case android:
+	    for (var i = 1; i < lines.length; i++) {
+		var str = lines[i].replace(/\s+/g,' ').replace(/\sms/g,'');
+		if (str.trim() == "") 
+		    continue;
+		
+		var ent = str.trim().split(' ');
+
+		var h = new Hop();
+		h.id = ent[0];
+		h.host = ent[1];
+		h.ip = ent[2] ? ent[2].replace(/\(|\)/gi, '') : ent[2];
+		
+		h.missed = 0;
+		h.rtt = [];
+		for (var k = 3; k < ent.length; k++) {
+		    if (ent[k] === '*') {
+			h.missed = h.missed + 1;
+		    } else {
+			h.rtt.push(parseFloat(ent[k]));
+		    }
+		}
+		
+		traceroute.hop.push(h);
+	    }
+	    break;
+	case darwin:
+	    var idx = 0;
+	    while (idx < cmd.length) {
+		switch (cmd[idx]) {
+		case "-q": 
+		    res.nqueries = parseInt(cmd[idx+1]);
+		    idx += 2;
+		    break;
+		default:
+		    idx += 1;
+		    break;
+		}
+	    }
+
+            var currhop = {};
+	    var currhopid = -1;
+	    for (var i = 0; i < lines.length; i++) {
+		var str = lines[i].trim();
+		if (!str || str.length === 0 || str.indexOf('traceroute')>=0) 
+		    continue;
+
+		var ent = str.replace(/\s+/g,' ').replace(/\sms/g,'').split(' ');
+		var dre = new RegExp(/^\d{1,2} /); // <id> <host> ..
+		if (dre.test(str)) {
+		    if (currhopid>0) {
+			res.hops[currhopid] = currhop;
+		    }
+		    currhop = {};
+		    currhopid = parseInt(ent[0].trim());
+		    ent = ent.slice(1);
+		}
+		
+		if (ent[0] == '*') {
+		    currhop['*'] = {hostname : undefined, rtt : [], missed : res.nqueries};
+		} else {
+		    var ip = ent[1].replace(/\(|\)/gi, '');
+		    currhop[ip] = {hostname : ent[0], rtt : [], missed : 0};
+		    for (var k = 2; k < ent.length; k++) {
+			if (ent[k] === '*') {
+			    currhop[ip].missed += 1;
+			} else {
+			    currhop[ip].rtt.push(parseFloat(ent[k]));
+			}
+		    }
+		}
+	    }
+
+	    if (currhopid>0) {
+		res.hops[currhopid] = currhop;
+	    }
+	    break;
+
+	case winnt:
+	    for (var i = 3; i < lines.length - 2; i++) {
+		var str = lines[i].replace(/\s+/g, ' ').replace(/\sms/g, '');
+		if (str.trim() == "") {
+		    continue;
+		}
+
+		var ent = str.trim().split(' ');
+
+		var h = new Hop();
+		h.id = ent[0];
+
+		if(ent.length == 6) {
+		    h.host = ent[4];
+		    h.ip = ent[5].replace(/\[|\]/gi, '');
+		} else if(ent.length == 5) {
+		    h.ip = ent[4];
+		}
+
+		if (h.ip) {
+		    h.missed = 0;
+		    h.rtt = [];
+		    for (var k = 1; k <= 3; k++) {
+			if (ent[k] === '*') {
+			    h.missed = h.missed + 1;
+			} else {
+			    h.rtt.push(parseFloat(ent[k].replace(/</g,'')));
+			}
+		    }
+		}
+
+		traceroute.hop.push(h);
+
+	    }
+	    break;
+	}
+	return res;
+    };
+    
+    parserfuncs["mtr"] = function(out, cmd, os) {
+	if (!_.contains(cmd, "--raw")) { 
+	    throw new Error("syscmdparser mtr --raw required");
+	};
+
+	var res = {
+	    dst: cmd[cmd.length-1],
+	    nqueries : 0,
+	    hops: {},        // cnt -> ip -> { hostname : val, rtt : [] };
+	};
+
+	var idx = 0;
+	while (idx < cmd.length) {
+	    switch (cmd[idx]) {
+	    case "-c": 
+		res.nqueries = parseInt(cmd[idx+1]);
+		idx += 2;
+		break;
+	    default:
+		idx += 1;
+		break;
+	    }
+	}
+
+	var lines = (out ? out.trim() : "").split("\n");
+	for (var i = 0; i < lines.length; i++) {
+	    var tmp = lines[i].trim().split(' ');
+	    var hopid = (parseInt(tmp[1])+1);
+	    switch (tmp[0]) {
+	    case 'h':
+		// traceroute indexes from 1, mtr from 0 ..
+		res.hops[hopid] = {};
+		res.hops[hopid][tmp[2]] = { hostname : undefined, missed : res.nqueries, rtt : [] };
+		break;
+	    case 'p':
+		var hop = res.hops[hopid];
+		hop = hop[_.keys(hop)[0]]; // mtr only keeps track of single ip per hop
+		hop.missed -= 1;
+		hop.rtt.push(parseInt(tmp[2])/1000.0);
+		break;
+	    case 'd':
+		var hop = (res.hops[hopid] ? res.hops[hopid] : res.hops[hopid-1]);
+		hop = hop[_.keys(hop)[0]];
+		hop.hostname = tmp[2];
+		break;
+	    }
+	}
+	return res;
     };
 
     parserfuncs["iperf"] = function(out, cmd, os) {
@@ -88,7 +269,7 @@
 	    throw new Error("syscmdparser iperf -Y [j|c] required");
 	}
 
-	// reporting styles
+	// reporting style
 	var iscsv = (cmd[idx+1].toLowerCase() === 'c');
 
 	var res = {
@@ -104,18 +285,18 @@
 		local_host : undefined,
 		remote_host : undefined
 	    },
-	    local : {                  // local received and/or sent data
+	    local : {                      // local received and/or sent data
 		recv : undefined,
 		send : undefined
 	    },
-	    remote : {                 // remote received and/or sent data
+	    remote : {                     // remote received and/or sent data
 		recv : undefined,
 		send : undefined
 	    }
 	};
 
 	// fill some of the header with the cmd params
-	var idx = 1;
+	var idx = 0;
 	while (idx < cmd.length) {
 	    switch (cmd[idx]) {
 	    case "-c": 
@@ -294,6 +475,7 @@
 		}
 	    }
 	} else { // json
+	    // just to match the common output format
 	}
 
 	return res;
@@ -324,8 +506,8 @@
 	    cmd : cmd[0],
 	    cmdline : cmd.join(' '),
 	    os : os,
-	    stderr : (stderr ? stderr.trim() : "nothing in stderr"),
-	    stdout : (stdout ? stdout.trim() : "nothing in stdout"),
+	    stderr : (stderr ? stderr.trim() : ""),
+	    stdout : (stdout ? stdout.trim().substring(0,32) : ""),
 	    result : undefined
 	};
 
