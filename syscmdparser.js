@@ -163,6 +163,48 @@
 	    }
 	    break;
 
+	case "/proc/net/route":
+	    res.routes = [];
+	    function ip4(val) {
+		var addr = [];
+		var tmp = (val & 0xFF);
+		if (tmp < 0) tmp = tmp & 0xFF + 1;
+		var t = addr.push(tmp);
+		tmp = (val & 0xFF00) >> 8;
+		if (tmp < 0) tmp = tmp & 0xFFFF + 1;
+		t = addr.push(tmp);
+		tmp = (val & 0xFF0000) >> 16;
+		if (tmp < 0) tmp = tmp & 0xFFFFFF + 1;
+		t = addr.push(tmp);
+		tmp = (val & 0xFF000000) >> 24;
+		if (tmp < 0) tmp = tmp & 0xFFFFFFFF + 1;
+		t = addr.push(tmp);
+		return addr.join(".");
+	    }
+	    var h = lines[0].toLowerCase().trim().replace(/\s+/g, ' ').split(' ');
+	    for (var i = 1; i < lines.length; i++) {
+		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
+		var o = {};
+		_.each(h, function(key,idx) {
+		    switch(key) {
+		    case 'destination':
+		    case 'gateway':
+		    case 'mask':
+			o[key] = ip4(line[idx]);
+			break;
+		    case 'iface':
+		    case 'flags':
+			o[key] = line[idx];
+			break;
+		    case default:
+			o[key] = parseInt(line[idx]);
+			break;
+		    }
+		});
+		res.routes.push(o);
+	    }
+	    break;
+
 	case "/proc/net/wireless":
 	    res.ifaces = {};
 	    for (var i = 0; i < lines.length; i++) {
