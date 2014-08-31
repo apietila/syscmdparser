@@ -45,7 +45,6 @@ exports.testPing = function(test) {
     });
 };
 
-
 exports.testFping = function(test) {
     test.expect(6);
     runcmd("fping -C 5 www.google.com", function(o) {

@@ -175,7 +175,7 @@
 	    res.lost = res.count - res.rtt.length;
 	    break;
 
-	case winnt:
+	case winnt: // FIXME
 	    if (lines.length > 1) {
 		for (var i = 0; i < lines.length; i++) {
 		    var line = lines[i].trim().replace(/\s+/g, ' ');
@@ -378,7 +378,7 @@
 	    }
 	    break;
 
-	case winnt:
+	case winnt: // FIXME
 	    for (var i = 3; i < lines.length - 2; i++) {
 		var str = lines[i].replace(/\s+/g, ' ').replace(/\sms/g, '');
 		if (str.trim() == "") {
@@ -408,9 +408,7 @@
 			}
 		    }
 		}
-
 		traceroute.hop.push(h);
-
 	    }
 	    break;
 	}
@@ -749,12 +747,13 @@
 
     /** @return List of supported OS platforms. */
     syscmdparser.getSupportedOSs = function() {
-	return [winnt,android,linux,darwin];
+	return [//winnt,
+	    android,linux,darwin];
     };
 
     /** @return True if we support this OS, else false. */
     var isOSSupported = syscmdparser.isOSSupported = function(os) {
-	return (os === winnt || 
+	return (//os === winnt || 
 		os === android || 
 		os === linux || 
 		os === darwin);
