@@ -119,6 +119,41 @@
     };
 
     // -- tools --
+    parserfuncs["nslookup"] = function(out, cmd, os) {
+	var lines = (out ? out.trim() : "").split("\n");
+	var res = {
+	    query: cmd[cmd.length-1],
+	    server : undefined,
+	    answers : []
+	};
+	var curr = {
+	    name : undefined,
+	    address : undefined
+	};
+
+	for (var i = 0; i < lines.length; i++) {
+	    var line = lines[i].trim().toLowerCase().replace(/\s+/g,' ').split(' ');
+
+	    if (line[0] === 'server:') {
+		res.server = line[1];
+	    } else if (line[0] === 'name:') {
+		if (curr.name) {
+		    res.answers.push(curr);
+		    curr = {
+			name : undefined,
+			address : undefined
+		    };
+		}
+		curr.name = line[1];
+	    } else if (line[0] === 'address:' && curr.name) {
+		curr.address = line[1];
+	    }
+	}
+
+	if (curr.name)
+	    res.answers.push(curr);
+	return res;
+    }
 
     parserfuncs["ping"] = function(out, cmd, os) {
 	var lines = (out ? out.trim() : "").split("\n");

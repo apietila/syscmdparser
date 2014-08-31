@@ -80,3 +80,14 @@ exports.testFpingEx = function(test) {
 	test.done();
     });
 };
+
+exports.testNslookup = function(test) {
+    test.expect(4);
+    runcmd("nslookup www.google.com", function(o) {
+	test.ok(!o.error, "returns no error");
+	test.ok(o.result.query === "www.google.com", "q ok");
+	test.ok(o.result.server, "found server");
+	test.ok(o.result.answers.length >= 1, "got at least one answer");
+	test.done();
+    });
+};
