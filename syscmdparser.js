@@ -196,7 +196,7 @@
 		    case 'flags':
 			o[key] = line[idx];
 			break;
-		    case default:
+		    default:
 			o[key] = parseInt(line[idx]);
 			break;
 		    }
