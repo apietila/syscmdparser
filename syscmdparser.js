@@ -299,6 +299,51 @@
     };
 
     parserfuncs["netstat"] = function(out, cmd, os) {
+	var res = {};
+	var lines = (out ? out.trim() : "").split("\n");
+
+	if (_.intersection(cmd, ['-b','-i']).length === 2 && os === darwin) {
+	    // interface statistics
+	    res.ifaces = {};
+	    for (var i = 1; i < lines.length; i++) {
+		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
+		if (line.length !== 11)
+		    continue
+
+		res.ifaces[line[0]] = {
+		    rx : {
+			packets : parseInt(line[4]), 
+			bytes : parseInt(line[6])
+		    },
+		    tx : {
+			packets : parseInt(line[7]), 
+			bytes : parseInt(line[9])
+		    }
+		}
+	    }
+	} else if (_.intersection(cmd, ['-r','-n']).length === 2) {
+	    // routing table
+	    res.routes = [];
+	    var h = undefined;
+	    for (var i = 0; i < lines.length; i++) {
+		var line = lines[i].trim().toLowerCase().replace(/\s+/g, ' ').split(' ');
+		if (line[0] === 'destination') {
+		    h = line.splice(0);		    
+		} else if (h && h.length >= line.length) {
+		    var o = {};
+		    _.each(h, function(key,idx) {
+			key = (key === 'netif' ? 'iface' : key);
+			if (idx < line.length)
+			    o[key] = line[idx];
+		    });
+		    res.routes.push(o);
+		} else {
+		    h = undefined;
+		}
+	    }
+	}
+
+	return res;
     };
 
     parserfuncs["top"] = function(out, cmd, os) {
