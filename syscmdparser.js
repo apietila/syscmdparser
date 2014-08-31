@@ -170,7 +170,7 @@
 		    continue;
 
 		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
-		res.iface[line[0].replace('/:/','')] = {
+		res.ifaces[line[0].replace('/:/','')] = {
 		    link : parseInt(line[2]),
 		    signal : parseInt(line[3]),
 		    noise : parseInt(line[4]),
@@ -185,7 +185,7 @@
 		    continue;
 
 		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
-		res.iface[line[0].replace('/:/','')] = {
+		res.ifaces[line[0].replace('/:/','')] = {
 		    rx : {
 			bytes : parseInt(line[1]),
 			packets : parseInt(line[2]), 
