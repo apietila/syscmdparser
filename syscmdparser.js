@@ -146,13 +146,59 @@
     parserfuncs["ifconfig"] = function(out, cmd, os) {
     };
 
+    parserfuncs["iwconfig"] = function(out, cmd, os) {
+    };
+
     parserfuncs["ipconfig"] = function(out, cmd, os) {
     };
 
     parserfuncs["ip"] = function(out, cmd, os) {
     };
 
+    parserfuncs["route"] = function(out, cmd, os) {
+    };
+
+    parserfuncs["netstat"] = function(out, cmd, os) {
+    };
+
     // -- tools --
+
+    parserfuncs["arp"] = function(out, cmd, os) {
+	var lines = (out ? out.trim() : "").split("\n");
+	var res = [];
+	
+	switch (os) {
+	case linux:
+	case android:
+	    for (var i = 0; i < lines.length; i++) {
+		var line = lines[i].trim().replace(/\s+/g,' ').split(' ');
+		res.push({
+		    hostname : line[0],
+		    address : line[1].replace(/\(|\)/gi,''),
+		    mac : line[3],
+		    type : line[4].replace(/\[|\]/gi,''),
+		    iface : line[6]
+		});
+	    }
+	    break;
+	case darwin:
+	    for (var i = 0; i < lines.length; i++) {
+		var line = lines[i].trim().replace(/\s+/g,' ').split(' ');
+		res.push({
+		    hostname : line[0],
+		    address : line[1].replace(/\(|\)/gi,''),
+		    mac : line[3],
+		    iface : line[5],
+		    type : line[7].replace(/\[|\]/gi,'')
+		});
+	    }
+	    break;
+	case winnt:
+	    break;
+	}
+	return res;
+    }
+
     parserfuncs["nslookup"] = function(out, cmd, os) {
 	var lines = (out ? out.trim() : "").split("\n");
 	var res = {

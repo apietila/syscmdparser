@@ -91,3 +91,13 @@ exports.testNslookup = function(test) {
 	test.done();
     });
 };
+
+
+exports.testArp = function(test) {
+    test.expect(2);
+    runcmd("arp -n -a", function(o) {
+	test.ok(!o.error, "returns no error");
+	test.ok(o.result.length >= 1, "got at least one answer");
+	test.done();
+    });
+};

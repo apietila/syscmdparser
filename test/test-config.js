@@ -19,3 +19,12 @@ exports.testHostname = function(test) {
     });
 };
 
+exports.testCatResolvConf = function(test) {
+    test.expect(2);
+    runcmd("cat /etc/resolv.conf", function(o) {
+	test.ok(o.error===undefined, "returns no error");
+	test.ok(o.result.nameservers.length >= 1, "found at least one nameserver");
+	test.done();
+    });
+};
+
