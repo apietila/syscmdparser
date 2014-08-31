@@ -116,6 +116,24 @@
 	    throw new Error("syscmdparser getprop not available on '" + os + "'");
     };
 
+    parserfuncs["vm_stat"] = function(out, cmd, os) {
+	if (os !== darwin)
+	    throw new Error("syscmdparser vm_stat not available on '" + os + "'");
+	var lines = (out ? out.trim() : "").split("\n");
+
+	var line = lines[0].trim().replace(/\s+/g, ' ').split(' ');
+	var res = {
+	    pagesize : parseInt(line[7])
+	}
+
+	for (var i = 1; i < lines.length; i++) {
+	    line = lines[i].trim().replace(/\s+/g, ' ').split(': ');
+	    var key = line[0].replace(/"/gi,'').replace(/ /gi,'_').toLowerCase();
+	    res[key] = parseInt(line[1].replace(/\./gi,''));
+	}
+	return res;
+    };
+
     parserfuncs["cat"] = function(out, cmd, os) {
 	var res = { srcfile : cmd[1] };
 
@@ -143,6 +161,15 @@
 	case "/proc/net/udp":
 	case "/proc/net/udp6":
 	    res.todo = true;
+	    break;
+	case "/proc/meminfo":
+	case "/proc/net/snmp6":
+	    for (var i = 0; i < lines.length; i++) {
+		if (lines[i].indexOf("#") === 0 || lines[i].length <= 0)
+		    continue;
+		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
+		res[line[0].replace(/:/gi,'').toLowerCase()] = parseInt(line[1]);
+	    }
 	    break;
 	case "/proc/net/netstat":
 	case "/proc/net/snmp":
@@ -191,6 +218,121 @@
     };
 
     parserfuncs["netstat"] = function(out, cmd, os) {
+    };
+
+    parserfuncs["top"] = function(out, cmd, os) {
+	var res = { 
+	    tasks : {
+		total: null,
+		running: null,
+		sleeping: null,
+	    },
+	    loadavg : {
+		onemin : null,
+		fivemin : null,
+		fifteenmin : null,
+	    },
+	    cpu : {
+		user: null,
+		system: null,
+		idle : null,
+	    },
+	    memory : {
+		total : null,
+		used: null,
+		free: null,
+	    },
+	};
+
+	var lines = (out ? out.trim() : "").split("\n");
+
+	switch (os) {
+	case android:
+	    for (var i = 0; i < lines.length; i++) {
+		var row = lines[i].trim().replace(/\s+/g, ' ').split(' ');
+		if (row[2] === 'System') {
+		    // User 0%, System 0%, IOW 0%, IRQ 0%
+		    res.cpu.user = parseFloat(row[1].replace('%,',''));
+		    res.cpu.system = parseFloat(row[3].replace('%,',''));
+		    res.cpu.idle = 100.0 - (res.cpu.user + res.cpu.system);
+		} else if (row[3] === 'Nice') {
+		    // User 8 + Nice 1 + Sys 23 + Idle 270 + IOW 1 + IRQ 0 + SIRQ 0 = 303
+		    res.tasks.total = parseInt(row[21]);
+		    res.tasks.sleeping = parseInt(row[10]);
+		    res.tasks.running = res.tasks.total - res.tasks.sleeping;
+		}
+	    }
+	    break;
+
+	case linux:
+	    for (var i = 0; i < lines.length; i++) {
+		var row = lines[i].trim().replace(/\s+/g, ' ').split(' ');
+		switch(row[0]) {
+		case "top":
+		    for (var j = 1; j<row.length; j++) {
+			if (row[j] == "average:") {
+			    res.loadavg.onemin = parseFloat(row[j+1].replace(',',''));
+			    res.loadavg.fivemin = parseFloat(row[j+2].replace(',',''));
+			    res.loadavg.fifteenmin = parseFloat(row[j+3].replace(',',''));
+			    break;
+			}
+		    }
+		case "Tasks:":
+		    res.tasks.total = parseInt(row[1]);
+		    res.tasks.running = parseInt(row[3]);
+		    res.tasks.sleeping = parseInt(row[5]);
+		    break;
+		case "%Cpu(s):":
+		    res.cpu.user = parseFloat(row[1]);
+		    res.cpu.system = parseFloat(row[3]);
+		    res.cpu.idle = parseFloat(row[7]);
+		    break;
+		case "KiB":
+		    if (row[1] == 'Mem:') {
+			res.memory.total = parseInt(row[2]) / 1024.0;
+			res.memory.used = parseInt(row[4]) / 1024.0;
+			res.memory.free = parseInt(row[6]) / 1024.0;
+			res.memore.unit = "M";
+		    }
+		    break;
+		default:
+		    break;
+		};
+	    }
+	    break;
+
+	case darwin:
+	    for (var i = 0; i < lines.length; i++) {
+		var row = lines[i].trim().replace(/\s+/g, ' ').split(' ');
+		switch(row[0]) {
+		case "Processes:":
+		    res.tasks.total = parseInt(row[1]);
+		    res.tasks.running = parseInt(row[3]);
+		    res.tasks.sleeping = parseInt(row[7]);
+		    break;
+		case "Load":
+		    res.loadavg.onemin = parseFloat(row[2].replace(',',''));
+		    res.loadavg.fivemin = parseFloat(row[3].replace(',',''));
+		    res.loadavg.fifteenmin = parseFloat(row[4].replace(',',''));
+		    break;
+		case "CPU":
+		    res.cpu.user = parseFloat(row[2].replace('%',''));
+		    res.cpu.system = parseFloat(row[4].replace('%',''));
+		    res.cpu.idle = parseFloat(row[6].replace('%',''));
+		    break;
+		case "PhysMem:":
+		    res.memory.used = parseInt(row[1].replace('M',''));
+		    res.memory.free = parseInt(row[5].replace('M',''));
+		    res.memory.total = (res.memory.used + res.memory.free);
+		    res.memory.unit = "M";
+		    break;
+		default:
+		    break;
+		};
+	    }
+	    break;
+	}
+	return res;
     };
 
     // -- tools --
