@@ -289,10 +289,10 @@
 		    break;
 		case "KiB":
 		    if (row[1] == 'Mem:') {
-			res.memory.total = parseInt(row[2]) / 1024.0;
-			res.memory.used = parseInt(row[4]) / 1024.0;
-			res.memory.free = parseInt(row[6]) / 1024.0;
-			res.memory.unit = "M";
+			res.memory.total = parseInt(row[2]);
+			res.memory.used = parseInt(row[4]);
+			res.memory.free = parseInt(row[6]);
+			res.memory.unit = "KiB";
 		    }
 		    break;
 		default:
