@@ -119,6 +119,7 @@
     parserfuncs["vm_stat"] = function(out, cmd, os) {
 	if (os !== darwin)
 	    throw new Error("syscmdparser vm_stat not available on '" + os + "'");
+
 	var lines = (out ? out.trim() : "").split("\n");
 
 	var line = lines[0].trim().replace(/\s+/g, ' ').split(' ');
@@ -134,10 +135,18 @@
 	return res;
     };
 
+    parserfuncs["netsh"] = function(out, cmd, os) {
+	if (os !== winnt)
+	    throw new Error("syscmdparser netsh not available on '" + os + "'");
+
+	// FIXME
+    };
+
     parserfuncs["cat"] = function(out, cmd, os) {
 	var res = { srcfile : cmd[1] };
 
 	var lines = (out ? out.trim() : "").split("\n");
+
 	switch (cmd[1]) {
 	case "/etc/resolv.conf":
 	    res.nameservers = [];
@@ -153,15 +162,53 @@
 		    res.nameservers.push(line[1]);
 	    }
 	    break;
+
 	case "/proc/net/wireless":
-	    res.todo = true;
+	    res.ifaces = {};
+	    for (var i = 0; i < lines.length && wifi.signal==null; i++) {
+		if (lines[i].indexOf("|") >= 0 || lines[i].length <= 0)
+		    continue;
+
+		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
+		res.iface[line[0].replace('/:/','')] = {
+		    link : parseInt(line[2]),
+		    signal : parseInt(line[3]),
+		    noise : parseInt(line[4]),
+		}
+	    }
 	    break;
+
+	case "/proc/net/dev":
+	    res.ifaces = {};
+	    for (var i = 0; i < lines.length && wifi.signal==null; i++) {
+		if (lines[i].indexOf("|") >= 0 || lines[i].length <= 0)
+		    continue;
+
+		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
+		res.iface[line[0].replace('/:/','')] = {
+		    rx : {
+			bytes : parseInt(line[1]),
+			packets : parseInt(line[2]), 
+			errs : parseInt(line[3]),
+			drop : parseInt(line[4])
+		    },
+		    tx : {
+			bytes : parseInt(line[8]),
+			packets : parseInt(line[9]), 
+			errs : parseInt(line[10]),
+			drop : parseInt(line[11]) 
+		    }
+		}
+	    }
+	    break;
+
 	case "/proc/net/tcp":
 	case "/proc/net/tcp6":
 	case "/proc/net/udp":
 	case "/proc/net/udp6":
-	    res.todo = true;
+	    // FIXME
 	    break;
+
 	case "/proc/meminfo":
 	case "/proc/net/snmp6":
 	    for (var i = 0; i < lines.length; i++) {
@@ -171,6 +218,7 @@
 		res[line[0].replace(/:/gi,'').toLowerCase()] = parseInt(line[1]);
 	    }
 	    break;
+
 	case "/proc/net/netstat":
 	case "/proc/net/snmp":
 	    var g = undefined;
@@ -195,6 +243,7 @@
 		}
 	    }
 	    break;
+
 	default:
 	    throw new Error("syscmdparser does not support 'cat " + cmd[1] + "'");
 	    break;
@@ -205,10 +254,42 @@
     parserfuncs["ifconfig"] = function(out, cmd, os) {
     };
 
+    parserfuncs["ipconfig"] = function(out, cmd, os) {
+    };
+
     parserfuncs["iwconfig"] = function(out, cmd, os) {
     };
 
-    parserfuncs["ipconfig"] = function(out, cmd, os) {
+    parserfuncs["airport"] = function(out, cmd, os) {
+	if (os !== darwin)
+	    throw new Error("syscmdparser airport not available on '" + os + "'");
+	if (!_.contains(cmd, "-I")) { 
+	    throw new Error("syscmdparser airport -I required");
+	};
+
+	var res = {};
+	var lines = (out ? out.trim() : "").split("\n");
+	for (var i = 0; i < lines.length; i++) {
+	    var line = lines[i].trim().replace(/\s+/g, ' ').split(': ');
+	    var key = line[0].replace(/"/gi,'').toLowerCase();
+	    switch(key) {
+	    case 'agrctlrssi':
+	    case 'agrctlnoise':
+	    case 'agrextrssi':
+	    case 'agrextnoise':
+	    case 'lasttxrate':
+	    case 'maxrate':
+	    case 'lastassocstatus':
+	    case 'mcs':
+	    case 'channel':
+		res[key] = parseInt(line[1]);
+		break;
+	    default:
+		res[key] = line[1];
+		break;
+	    };
+	}
+	return res;
     };
 
     parserfuncs["ip"] = function(out, cmd, os) {
