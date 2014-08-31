@@ -127,9 +127,11 @@
 	    dst_ip : undefined,      // resolved IP
 	    count : 0,               // -c
 	    lost : 0,                // lost pkts
-	    bytes : 0,              // -b or default
+	    bytes : 0,               // -b or default
+	    ttl : undefined, 
 	    rtt : [],                // results
-	    stats : undefined        // basic stats
+	    stats : undefined,        // basic stats
+	    time_exceeded_from : undefined
 	};
 
 	switch (os) {
@@ -143,17 +145,24 @@
 		    res.count = parseInt(cmd[idx+1]);
 		    idx += 2;
 		    break;
+		case "-m": 
+		    res.ttl = parseInt(cmd[idx+1]);
+		    idx += 2;
+		    break;
 		default:
 		    idx += 1;
 		    break;
 		}
 	    }
 
+	    console.log(out);
 
 	    for (var i = 0; i < lines.length; i++) {	    
 		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
-
-		if (line[0] === 'PING') {
+		if (lines[i].toLowerCase().indexOf('time to live exceeded')>=0) {
+		    res.time_exceeded_from = line[3].replace(/:/gi, '');
+		    break;		    
+		} else if (line[0] === 'PING') {
 		    res.dst_ip = line[2].replace(/\(|\)|:/gi, '');
 		    res.bytes = parseInt(line[3])
 		} else if (line[1] === 'bytes') {
@@ -249,15 +258,16 @@
 	if (!_.contains(cmd, "-C")) { 
 	    throw new Error("syscmdparser fping -C required");
 	};
-	console.log(out);
 
 	var res = {
 	    dst: cmd[cmd.length-1],
 	    count : 0,               // -C
 	    lost : 0,                // lost pkts
 	    bytes : 56,              // -b or default
+	    ttl : undefined,         // -H or default
 	    rtt : [],                // results
-	    stats : undefined        // basic stats
+	    stats : undefined,        // basic stats
+	    time_exceeded_from : undefined
 	};
 
 	var idx = 0;
@@ -265,6 +275,10 @@
 	    switch (cmd[idx]) {
 	    case "-C": 
 		res.count = parseInt(cmd[idx+1]);
+		idx += 2;
+		break;
+	    case "-H": 
+		res.ttl = parseInt(cmd[idx+1]);
 		idx += 2;
 		break;
 	    case "-b": 
@@ -278,10 +292,15 @@
 	}
 
 	var lines = (out ? out.trim() : "").split("\n");
-	for (var i = 0; i < lines.length; i++) {	    
-	    var line = (lines[i] ? lines[i].trim() : "").replace(/\s+/g, ' ').split(' ');
-	    if (/\d+\.?\d*/.test(line[5])) {
-		res.rtt.push(parseFloat(line[5]));
+	for (var i = 0; i < lines.length; i++) {
+	    var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
+	    if (lines[i].toLowerCase().indexOf('time exceeded')>=0) {
+		res.time_exceeded_from = line[4];
+		break;
+	    } else {
+		if (/\d+\.?\d*/.test(line[5])) {
+		    res.rtt.push(parseFloat(line[5]));
+		}
 	    }
 	}
 
@@ -701,7 +720,17 @@
 
 	if (error) {
 	    res.error = (error.code || error);
-	} else {
+
+	    // some exceptions that provide usefull output even on error
+	    if (cmd[0] === 'ping' && res.error == 2) {
+		res.error = undefined;
+	    } else if (cmd[0] === 'fping' && res.error == 1) {
+		res.error = undefined;
+		stdout = stderr;
+	    }
+	}
+
+	if (!res.error) {
 	    stdout = (stdout ? stdout.trim() : "");
 	    res.result = parserfuncs[cmd[0]](stdout, cmd, os);
 	}
