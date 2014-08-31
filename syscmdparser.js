@@ -292,7 +292,7 @@
 			res.memory.total = parseInt(row[2]) / 1024.0;
 			res.memory.used = parseInt(row[4]) / 1024.0;
 			res.memory.free = parseInt(row[6]) / 1024.0;
-			res.memore.unit = "M";
+			res.memory.unit = "M";
 		    }
 		    break;
 		default:
