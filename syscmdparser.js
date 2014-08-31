@@ -95,31 +95,6 @@
 	switch (os) {
 	case linux:
 	case android:
-	    for (var i = 1; i < lines.length; i++) {
-		var str = lines[i].replace(/\s+/g,' ').replace(/\sms/g,'');
-		if (str.trim() == "") 
-		    continue;
-		
-		var ent = str.trim().split(' ');
-
-		var h = new Hop();
-		h.id = ent[0];
-		h.host = ent[1];
-		h.ip = ent[2] ? ent[2].replace(/\(|\)/gi, '') : ent[2];
-		
-		h.missed = 0;
-		h.rtt = [];
-		for (var k = 3; k < ent.length; k++) {
-		    if (ent[k] === '*') {
-			h.missed = h.missed + 1;
-		    } else {
-			h.rtt.push(parseFloat(ent[k]));
-		    }
-		}
-		
-		traceroute.hop.push(h);
-	    }
-	    break;
 	case darwin:
 	    var idx = 0;
 	    while (idx < cmd.length) {
