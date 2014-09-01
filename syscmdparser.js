@@ -293,7 +293,7 @@
 	
 	switch (os) {
 	case linux:
-	    var ifaces = (out ? out.trim() : "").trim().split("\n\n");
+	    var ifaces = (out ? out.trim() : "").split("\n\n");
 	    for (var i = 0; i < ifaces.length; i++) {
 		var str = ifaces[i].trim().replace(/\s+/g, ' ');
 		if (!str)
@@ -327,8 +327,62 @@
 		    res[iface.name] = iface;
 	    }
 	    break;
-	case darwin: // FIXME
+
+	case darwin:
+	    var lines = (out ? out.trim() : "").split("\n");
+
+	    // group by name -> string
+	    var tmp = {};
+	    var name = undefined;
+	    var re = /^([\w\d]+): flags/;
+	    for (var i = 0; i < lines.length; i++) {
+		var m = re.exec(lines[i]);
+		if (m) {
+		    name = m[1];
+		    tmp[name] = lines[i].slice(lines[i].indexOf(':')+1).trim() + ' ';
+		} else {
+		    tmp[name] += lines[i].trim() + ' ';
+		}
+	    }
+
+	    // parse each iface
+	    _.each(tmp, function(str, name) {
+		var iface = { name : name};
+
+		var attrs = {
+		    'mtu': /mtu (\d+) /gi,
+		    'ipv6': /inet6 ([\:\d\w]+)/gi,
+		    'ipv4': /inet ([\.\d]+) /gi,
+		    'mask': /netmask 0x([\d\w]+) /gi,
+		    'mac': /ether ([\w:\d]+) /gi
+		};
+
+		// remove any extra whitespace
+		str = str.replace(/\s+/g, ' ');
+
+		// match attrs
+		_.each(attrs, function(value, key) {
+		    var m = null;
+		    while ((m = value.exec(str)) !== null) {
+			iface[key] = m[1];
+			if (key === 'mtu') {
+			    iface[key] = parseInt(m[1]);
+			} else if (key === 'mask') {
+			    // hex mask, convert to ip
+			    var tmp = [];
+			    for (var j = 0; j < 8; j+=2) {
+				tmp.push(parseInt('0x' + m[1].substring(j,j+2)));
+			    }
+			    iface[key] = tmp.join('.');
+			}
+		    }
+		});
+
+		if (iface.name)
+		    res[iface.name] = iface;
+	    });
 	    break;
+
 	default:
 	    throw new Error("syscmdparser 'ifconfig' not available on '" + os + "'");
 	}
@@ -343,6 +397,41 @@
 	// FIXME
     };
 
+    parserfuncs["networksetup"] = function(out, cmd, os) {
+	var res = undefined;
+	if (os !== darwin)
+	    throw new Error("syscmdparser 'networksetup' not available on '" + os + "'");
+	switch (cmd[1]) {
+	case "-listallhardwareports":
+	    res = {};
+	    var ifaces = (out ? out.trim() : "").split("\n\n");
+	    for (var i = 0; i < ifaces.length; i++) {
+		var vars = ifaces[i].trim().split('\n');
+		var iface = {};
+		_.each(vars, function(s) {
+		    var tmp = s.split(': ');
+		    switch (tmp[0].trim().toLowerCase()) {
+		    case "hardware port":
+			iface['type'] = tmp[1].trim().toLowerCase();
+			break;
+		    case "device":
+			iface['name'] = tmp[1].trim();
+			break;
+		    case "ethernet address":
+			iface['mac'] = tmp[1].trim();
+			break;
+		    }
+		});
+		if (iface.name)
+		    res[iface.name] = iface;
+	    }
+	    break;
+	default:
+	    throw new Error("syscmdparser 'networksetup' unknown switch " + cmd[1]);
+	};
+	return res;
+    }
+
     parserfuncs["airport"] = function(out, cmd, os) {
 	if (os !== darwin)
 	    throw new Error("syscmdparser 'airport' not available on '" + os + "'");
@@ -356,7 +445,7 @@
 	if (_.contains(cmd, "-I")) {
 	    for (var i = 0; i < lines.length; i++) {
 		var line = lines[i].trim().replace(/\s+/g, ' ').split(': ');
-		var key = line[0].replace(/"/gi,'').toLowerCase();
+		var key = line[0].replace(/"/gi,'').replace(/ /gi,'_').toLowerCase();
 		switch(key) {
 		case 'agrctlrssi':
 		case 'agrctlnoise':
@@ -566,6 +655,8 @@
 	    var h = undefined;
 	    for (var i = 0; i < lines.length; i++) {
 		var line = lines[i].trim().toLowerCase().replace(/\s+/g, ' ').split(' ');
+		if (line.length < 4)
+		    continue;
 		if (line[0] === 'destination') {
 		    h = line.splice(0);		    
 		} else if (h && h.length >= line.length) {
