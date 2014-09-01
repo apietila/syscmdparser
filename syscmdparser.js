@@ -135,13 +135,6 @@
 	return res;
     };
 
-    parserfuncs["netsh"] = function(out, cmd, os) {
-	if (os !== winnt)
-	    throw new Error("syscmdparser netsh not available on '" + os + "'");
-
-	// FIXME
-    };
-
     parserfuncs["cat"] = function(out, cmd, os) {
 	var res = { srcfile : cmd[1] };
 
@@ -293,43 +286,76 @@
 	return res;
     };
 
+    parserfuncs["netsh"] = function(out, cmd, os) {
+	if (os !== winnt)
+	    throw new Error("syscmdparser netsh not available on '" + os + "'");
+
+	// FIXME
+    };
+
     parserfuncs["ifconfig"] = function(out, cmd, os) {
+	// FIXME
     };
 
     parserfuncs["ipconfig"] = function(out, cmd, os) {
+	// FIXME
     };
 
     parserfuncs["iwconfig"] = function(out, cmd, os) {
+	// FIXME
     };
 
     parserfuncs["airport"] = function(out, cmd, os) {
 	if (os !== darwin)
 	    throw new Error("syscmdparser airport not available on '" + os + "'");
-	if (!_.contains(cmd, "-I")) { 
-	    throw new Error("syscmdparser airport -I required");
+	if (!_.contains(cmd, "-I") && !_.contains(cmd, "-s")) { 
+	    throw new Error("syscmdparser airport -I or -s required");
 	};
 
 	var res = {};
 	var lines = (out ? out.trim() : "").split("\n");
-	for (var i = 0; i < lines.length; i++) {
-	    var line = lines[i].trim().replace(/\s+/g, ' ').split(': ');
-	    var key = line[0].replace(/"/gi,'').toLowerCase();
-	    switch(key) {
-	    case 'agrctlrssi':
-	    case 'agrctlnoise':
-	    case 'agrextrssi':
-	    case 'agrextnoise':
-	    case 'lasttxrate':
-	    case 'maxrate':
-	    case 'lastassocstatus':
-	    case 'mcs':
-	    case 'channel':
-		res[key] = parseInt(line[1]);
-		break;
-	    default:
-		res[key] = line[1];
-		break;
-	    };
+
+	if (_.contains(cmd, "-I")) {
+	    for (var i = 0; i < lines.length; i++) {
+		var line = lines[i].trim().replace(/\s+/g, ' ').split(': ');
+		var key = line[0].replace(/"/gi,'').toLowerCase();
+		switch(key) {
+		case 'agrctlrssi':
+		case 'agrctlnoise':
+		case 'agrextrssi':
+		case 'agrextnoise':
+		case 'lasttxrate':
+		case 'maxrate':
+		case 'lastassocstatus':
+		case 'mcs':
+		case 'channel':
+		    res[key] = parseInt(line[1]);
+		    break;
+		default:
+		    res[key] = line[1];
+		    break;
+		};
+	    }
+	} else {
+	    // scan results
+	    res = [];
+	    var h = lines[0].trim().toLowerCase().replace(/\s+/g, ' ').split(' ');
+	    h.pop();
+	    for (var i = 1; i < lines.length; i++) {
+		var line = lines[i].trim();
+		var o = {};
+		_.each(h, function(key,idx) {
+		    switch(key) {
+		    case 'rssi':
+			o[key] = parseInt(line[idx]);
+			break;
+		    default:
+			o[key] = line[idx];
+			break;
+		    }
+		});
+		res.push(o);
+	    }
 	}
 	return res;
     };
