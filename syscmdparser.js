@@ -314,7 +314,6 @@
 		};
 
 		_.each(attrs, function(value, key) {
-		    console.log(key);
 		    var m = null;
 		    while ((m = value.exec(str)) !== null) {
 			iface[key] = m[1];
