@@ -21,7 +21,8 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  SOFTWARE.
 */
-//"use strict"; // disabled for now because of some const defs (only avail in harmony)
+
+"use strict";
 
 (function() {
     var root = this;
@@ -94,14 +95,17 @@
     }
 
     //--------------------------------
+    // supported OSs
+
+    var winnt = "winnt";
+    var android = "android";
+    var linux = "linux";
+    var darwin = "darwin";
+
+    //--------------------------------
     // parsers
 
-    const winnt = "winnt";
-    const android = "android";
-    const linux = "linux";
-    const darwin = "darwin";
-
-    const parserfuncs = {};
+    var parserfuncs = {};
 
     // -- configs --
 
@@ -113,15 +117,14 @@
 	if (os === android)
 	    return (out ? out.trim() : "");
 	else
-	    throw new Error("syscmdparser getprop not available on '" + os + "'");
+	    throw new Error("syscmdparser 'getprop' not available on '" + os + "'");
     };
 
     parserfuncs["vm_stat"] = function(out, cmd, os) {
 	if (os !== darwin)
-	    throw new Error("syscmdparser vm_stat not available on '" + os + "'");
+	    throw new Error("syscmdparser 'vm_stat' not available on '" + os + "'");
 
 	var lines = (out ? out.trim() : "").split("\n");
-
 	var line = lines[0].trim().replace(/\s+/g, ' ').split(' ');
 	var res = {
 	    pagesize : parseInt(line[7])
@@ -136,8 +139,24 @@
     };
 
     parserfuncs["cat"] = function(out, cmd, os) {
-	var res = { srcfile : cmd[1] };
+	function ip4(val) {
+	    var addr = [];
+	    var tmp = (val & 0xFF);
+	    if (tmp < 0) tmp = tmp & 0xFF + 1;
+	    var t = addr.push(tmp);
+	    tmp = (val & 0xFF00) >> 8;
+	    if (tmp < 0) tmp = tmp & 0xFFFF + 1;
+	    t = addr.push(tmp);
+	    tmp = (val & 0xFF0000) >> 16;
+	    if (tmp < 0) tmp = tmp & 0xFFFFFF + 1;
+	    t = addr.push(tmp);
+	    tmp = (val & 0xFF000000) >> 24;
+	    if (tmp < 0) tmp = tmp & 0xFFFFFFFF + 1;
+	    t = addr.push(tmp);
+	    return addr.join(".");
+	}
 
+	var res = { srcfile : cmd[1] };
 	var lines = (out ? out.trim() : "").split("\n");
 
 	switch (cmd[1]) {
@@ -158,22 +177,6 @@
 
 	case "/proc/net/route":
 	    res.routes = [];
-	    function ip4(val) {
-		var addr = [];
-		var tmp = (val & 0xFF);
-		if (tmp < 0) tmp = tmp & 0xFF + 1;
-		var t = addr.push(tmp);
-		tmp = (val & 0xFF00) >> 8;
-		if (tmp < 0) tmp = tmp & 0xFFFF + 1;
-		t = addr.push(tmp);
-		tmp = (val & 0xFF0000) >> 16;
-		if (tmp < 0) tmp = tmp & 0xFFFFFF + 1;
-		t = addr.push(tmp);
-		tmp = (val & 0xFF000000) >> 24;
-		if (tmp < 0) tmp = tmp & 0xFFFFFFFF + 1;
-		t = addr.push(tmp);
-		return addr.join(".");
-	    }
 	    var h = lines[0].toLowerCase().trim().replace(/\s+/g, ' ').split(' ');
 	    for (var i = 1; i < lines.length; i++) {
 		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
@@ -272,7 +275,7 @@
 		    g = g.replace(/:/gi,'').toLowerCase();
 		    res[g] = {}
 		    _.each(h, function(key,idx) {
-			res[g][key] = parseInt(line[idx+1]);
+			res[g][key.toLowerCase()] = parseInt(line[idx+1]);
 		    });
 		    g = undefined;
 		}
@@ -364,21 +367,42 @@
     };
 
     parserfuncs["route"] = function(out, cmd, os) {
+	var res = [];
+	var lines = (out ? out.trim() : "").split("\n");
+	
+	var h = undefined;
+	for (var i = 0; i < lines.length; i++) {
+	    var line = lines[i].trim().toLowerCase().replace(/\s+/g, ' ').split(' ');
+	    if (line[0] === 'destination') {
+		h = line.splice(0);		    
+	    } else if (h && h.length >= line.length) {
+		var o = {};
+		_.each(h, function(key,idx) {
+		    key = (key === 'netif' ? 'iface' : key);
+		    if (idx < line.length)
+			o[key] = line[idx];
+		});
+		res.push(o);
+	    } else {
+		h = undefined;
+	    }
+	}
+	return res;
     };
 
     parserfuncs["netstat"] = function(out, cmd, os) {
-	var res = {};
+	var res = undefined;
 	var lines = (out ? out.trim() : "").split("\n");
 
 	if (_.intersection(cmd, ['-b','-i']).length === 2 && os === darwin) {
 	    // interface statistics
-	    res.ifaces = {};
+	    res = {};
 	    for (var i = 1; i < lines.length; i++) {
 		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
 		if (line.length !== 11)
 		    continue
 
-		res.ifaces[line[0]] = {
+		res[line[0]] = {
 		    rx : {
 			packets : parseInt(line[4]), 
 			bytes : parseInt(line[6])
@@ -391,7 +415,7 @@
 	    }
 	} else if (_.intersection(cmd, ['-r','-n']).length === 2) {
 	    // routing table
-	    res.routes = [];
+	    res = [];
 	    var h = undefined;
 	    for (var i = 0; i < lines.length; i++) {
 		var line = lines[i].trim().toLowerCase().replace(/\s+/g, ' ').split(' ');
@@ -404,13 +428,15 @@
 			if (idx < line.length)
 			    o[key] = line[idx];
 		    });
-		    res.routes.push(o);
+		    res.push(o);
 		} else {
 		    h = undefined;
 		}
 	    }
+	} else {
+	    // ok don't know what to do
+	    throw new Error("syscmdparser 'netstat' unknown options: " + cmd.splice(1).join(' '));
 	}
-
 	return res;
     };
 
