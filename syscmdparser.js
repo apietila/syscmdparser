@@ -54,13 +54,7 @@
 	} else 
 	    throw new Error('syscmdparser requires underscore, see http://underscorejs.org');
     }
-
-    // optional dependency
-    var ipaddr = root.ipaddr;
-    if (typeof ipaddr === 'undefined' && has_require) {
-	ipaddr = require('ipaddr.js');
-    }
-    
+   
     // min/max/mean/median/std_dev/variance of an array or null if x is empty
     var describe = function(x) {    
         if (x.length === 0) return null;
@@ -283,7 +277,6 @@
 
 	default:
 	    throw new Error("syscmdparser does not support 'cat " + cmd[1] + "'");
-	    break;
 	}
 	return res;
     };
@@ -877,75 +870,6 @@
 	    break;
 
 	case winnt: // FIXME
-	    if (lines.length > 1) {
-		for (var i = 0; i < lines.length; i++) {
-		    var line = lines[i].trim().replace(/\s+/g, ' ');
-		    if (i == 0) {
-			var s = line.split(' ');
-			ping.domain = s[1];
-			ping.ip = s[1];
-			if (s[2].indexOf('[')>=0) {
-			    ping.ip = s[2].replace(/[\[\]]/gi, '');
-			    if (ping.ip == "::1")
-				ping.ip = "127.0.0.1"
-			}
-
-		    } else if (line.indexOf("Reply from")>=0) {
-			var s = line.split(' ');
-
-			var p = new Ping();
-			if (s[2] === "::1:") {
-			    p.ip = '127.0.0.1'
-			    p.domain = 'localhost'
-			} else {
-			    p.ip = s[2].replace(/[\[\]:]/gi, '');
-			    p.domain = p.ip;
-			}
-
-			for (var j = 3; j<s.length; j++) {
-			    if (s[j].indexOf('=')>0) {
-				var tmp = s[j].trim().split('=');
-				p[tmp[0].toLowerCase()] = parseFloat(tmp[1].replace(/ms/,''));
-			    } else if (s[j].indexOf('<')>=0) {
-				var tmp = s[j].trim().split('<');
-				p[tmp[0].toLowerCase()] = parseFloat(tmp[1].replace(/ms/,''));
-			    }
-			};
-
-			ping.pings.push(p);
-
-		    } else if (line.indexOf("Packets: Sent =")>=0) {
-			var s = line.split(',');
-
-			var sent = s[0].trim().split(' ')[3];
-			var received = s[1].trim().split(' ')[2];
-			var lost = s[2].trim().split('%')[0].split("(")[1];
-			ping.stats.packets.sent = parseInt(sent);
-			ping.stats.packets.received = parseInt(received);
-			ping.stats.packets.lost = ping.stats.packets.sent - ping.stats.packets.received;
-			ping.stats.packets.lossrate = 100.0;
-			ping.stats.packets.succrate = 0.0;
-			if (sent>0) {
-			    ping.stats.packets.lossrate = ping.stats.packets.lost*100.0/ping.stats.packets.sent;
-			    ping.stats.packets.succrate = ping.stats.packets.received*100.0/ping.stats.packets.sent;
-			}
-		    } else if (line.indexOf("Minimum =")>=0) {
-			var s = line.split(',');
-
-			var min = s[0].split('=')[1].split('ms')[0].trim();
-			var max = s[1].split('=')[1].split('ms')[0].trim();
-			var avg = s[2].split('=')[1].split('ms')[0].trim();
-			var mdev = 0;
-
-			ping.stats.rtt.min = parseFloat(min);
-			ping.stats.rtt.max = parseFloat(max);
-			ping.stats.rtt.avg = parseFloat(avg);
-			ping.stats.rtt.mdev = parseFloat(mdev);
-		    }
-		}
-	    } else {
-		ping = {error: lines[0]};
-	    }
 	    break;
 	}
 

@@ -25,7 +25,6 @@
   },
   "homepage": "https://github.com/apietila/syscmdparser",
   "dependencies" : {
-    "ipaddr.js" : "*",
     "underscore" : "*"
   }, 
   "devDependencies": {
