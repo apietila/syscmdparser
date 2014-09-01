@@ -613,13 +613,50 @@
 	    bytes : 0,               // -b or default
 	    ttl : undefined, 
 	    rtt : [],                // results
-	    stats : undefined,        // basic stats
-	    time_exceeded_from : undefined
+	    stats : undefined,       // rtt stats
+	    time_exceeded_from : undefined // IP of sender
 	};
 
 	switch (os) {
 	case linux:
 	case android:
+	    var idx = 0;
+	    while (idx < cmd.length) {
+		switch (cmd[idx]) {
+		case "-c": 
+		    res.count = parseInt(cmd[idx+1]);
+		    idx += 2;
+		    break;
+		case "-t": 
+		    res.ttl = parseInt(cmd[idx+1]);
+		    idx += 2;
+		    break;
+		default:
+		    idx += 1;
+		    break;
+		}
+	    }
+
+	    for (var i = 0; i < lines.length; i++) {	    
+		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
+		if (lines[i].toLowerCase().indexOf('time to live exceeded')>=0) {
+		    res.time_exceeded_from = line[2].replace(/\(|\)|:/gi, '');
+		    break;		    
+		} else if (line[0] === 'PING') {
+		    res.dst_ip = line[2].replace(/\(|\)|:/gi, '');
+		    res.bytes = parseInt((line[3].indexOf('\(') < 0 ? line[3] : line[3].substring(0,line[3].indexOf('\('))));
+		} else if (line[1] === 'bytes') {
+		    for (var j = 2; j < line.length; j++) {
+			if (line[j].indexOf('time=') === 0) {
+			    var tmp = line[j].split('=');
+			    res.rtt.push(parseFloat(tmp[1]));
+			}
+		    }
+		}
+	    }
+	    res.lost = res.count - res.rtt.length;
+	    break;
+
 	case darwin:
 	    var idx = 0;
 	    while (idx < cmd.length) {
@@ -1207,7 +1244,9 @@
 	    res.error = (error.code || error);
 
 	    // some exceptions that provide usefull output even on error
-	    if (prog === 'ping' && res.error == 2) {
+	    if (prog === 'ping' && 
+		((res.error == 2 && os === darwin) || 
+		 (res.error == 1 && (os === linux || os === android)))) {
 		res.error = undefined;
 	    } else if (prog === 'fping' && res.error == 1) {
 		res.error = undefined;

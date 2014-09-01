@@ -60,7 +60,12 @@ exports.testFping = function(test) {
 
 exports.testPingEx = function(test) {
     test.expect(4);
-    runcmd("ping -c 1 -m 1 www.google.com", function(o) {
+
+    var param = "-t 1";
+    if (os === "darwin")
+	param = "-m 1";
+
+    runcmd("ping -c 1 "+param+" www.google.com", function(o) {
 	test.ok(!o.error, "returns no error");
 	test.ok(o.result.ttl === 1, "ttl ok");
 	test.ok(!o.result.stats, "no stats");
