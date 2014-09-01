@@ -45,9 +45,8 @@
 	root.syscmdparser = syscmdparser;
     }
 
-    var has_require = typeof require !== 'undefined';
-
     // check for dependencies
+    var has_require = typeof require !== 'undefined';
     var _ = root._;
     if (typeof _ === 'undefined' ) {
 	if( has_require ) {
@@ -291,13 +290,57 @@
 
     parserfuncs["netsh"] = function(out, cmd, os) {
 	if (os !== winnt)
-	    throw new Error("syscmdparser netsh not available on '" + os + "'");
+	    throw new Error("syscmdparser 'netsh' not available on '" + os + "'");
 
 	// FIXME
     };
 
     parserfuncs["ifconfig"] = function(out, cmd, os) {
-	// FIXME
+	var res = {};
+	
+	switch (os) {
+	case linux:
+	    var ifaces = (out ? out.trim() : "").trim().split("\n\n");
+	    for (var i = 0; i < ifaces.length; i++) {
+		var str = ifaces[i].trim().replace(/\s+/g, ' ');
+		if (!str)
+		    continue
+
+		var iface = {};
+
+		var attrs = {
+		    'name': /^([\w\d]+) /gi,
+		    'type': /encap:(\w+) /gi,
+		    'mac': /hwaddr ([\w:\d]+) /gi,
+		    'ipv4': /inet addr:([\.\d]+) /gi,
+		    'ipv6': /inet6 addr: ([\:\d\w]+\/\d+) /gi,
+		    'broadcast': /bcast:([\.\d]+) /gi,
+		    'mask': /mask:([\.\d]+) /gi,
+		    'mtu': /mtu:(\d+) /gi,
+		    'txqueuelen': /txqueuelen:(\d+) /gi
+		};
+
+		_.each(attrs, function(value, key) {
+		    console.log(key);
+		    var m = null;
+		    while ((m = value.exec(str)) !== null) {
+			iface[key] = m[1];
+			if (key === 'mtu' || key === 'txqueuelen')
+			    iface[key] = parseInt(m[1]);
+			else if (key === 'type')
+			    iface[key] = m[1].toLowerCase();
+		    }
+		});
+		if (iface.name)
+		    res[iface.name] = iface;
+	    }
+	    break;
+	case darwin: // FIXME
+	    break;
+	default:
+	    throw new Error("syscmdparser 'ifconfig' not available on '" + os + "'");
+	}
+	return res;
     };
 
     parserfuncs["ipconfig"] = function(out, cmd, os) {
@@ -310,9 +353,9 @@
 
     parserfuncs["airport"] = function(out, cmd, os) {
 	if (os !== darwin)
-	    throw new Error("syscmdparser airport not available on '" + os + "'");
+	    throw new Error("syscmdparser 'airport' not available on '" + os + "'");
 	if (!_.contains(cmd, "-I") && !_.contains(cmd, "-s")) { 
-	    throw new Error("syscmdparser airport -I or -s required");
+	    throw new Error("syscmdparser 'airport' -I or -s required");
 	};
 
 	var res = {};
@@ -364,6 +407,117 @@
     };
 
     parserfuncs["ip"] = function(out, cmd, os) {
+	var res = undefined;
+	var lines = (out ? out.trim() : "").split("\n");
+	
+	// ip [ OPTIONS ] OBJECT 
+	var idx = 1;
+	var obj = cmd[idx];
+	while (obj.indexOf('-')>=0) {
+	    idx += 1;
+	    if (obj === '-f') // has a param
+		idx += 1;
+	    obj = cmd[idx];
+	}
+
+	switch (obj) {
+	case "neigh":
+	    res = [];
+	    for (var i = 0; i < lines.length; i++) {
+		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
+		if (line.length!==6)
+		    continue
+		res.push({
+		    address : line[0],
+		    iface : line[2],
+		    mac : line[4]
+		});
+	    }
+	    break;
+
+	case "addr":
+	    res = {};
+	    for (var i = 0; i < lines.length; i++) {
+		var str = lines[i].trim().replace(/\s+/g, ' ');
+		if (!str)
+		    continue
+
+		var re = /^\d+: ([\w\d]+) /gi;
+		var name = re.exec(str);
+		if (name)
+		    name = name[1];
+		var iface = res[name] || { name : name };
+		var attrs = {
+		    'ipv4': /inet ([\.\d]+)\/(\d+) /gi,
+		    'ipv6': /inet6 ([\:\d\w]+\/\d+) /gi,
+		    'broadcast': /brd ([\.\d]+) /gi,
+		};
+
+		_.each(attrs, function(value, key) {
+		    var m = null;
+		    while ((m = value.exec(str)) !== null) {
+			iface[key] = m[1];
+
+			if (key === 'ipv4' && m[2]) {
+			    var mask = parseInt(m[2]);
+			    iface['mask'] = "";
+			    var s = '';
+			    for (var i = 0; i <= 32; i++) {
+				if (s.length === 8) {
+				    iface['mask'] += parseInt(s, 2) + '.';
+				    s = '';
+				}
+				s += (i >= mask ? '0' : '1');
+			    }
+			    iface['mask'] = iface['mask'].slice(0,-1);
+			}
+		    }
+		});
+
+		res[iface.name] = iface;		
+	    }
+	    break;
+
+	case "link":
+	    res = {};
+	    for (var i = 0; i < lines.length; i++) {
+		var str = lines[i].trim().replace(/\s+/g, ' ');
+		if (!str)
+		    continue
+
+		var iface = {};
+		var attrs = {
+		    'name': /^\d+: ([\w\d]+): /gi,
+		    'type': /link\/(\w+) /gi,
+		    'mac': /link\/\w+ ([\w:\d]+) /gi,
+		    'mtu': /mtu (\d+) /gi,
+		    'qdisc': /qdisc ([\w_]+) /gi,
+		    'txqueuelen': /qlen (\d+)\\ /gi
+		};
+
+		_.each(attrs, function(value, key) {
+		    var res = null;
+		    while ((res = value.exec(str)) !== null) {
+			iface[key] = res[1];
+			if (key === 'mtu' || key === 'txqueuelen')
+			    iface[key] = parseInt(res[1]);
+			else if (key === 'type')
+			    iface[key] = res[1].toLowerCase();
+		    }
+		});
+
+		if (iface.name)
+		    res[iface.name] = iface;
+		
+	    }
+	    break;
+
+	default:
+	    // don't know what to do
+	    throw new Error("syscmdparser 'ip' unknown object: " + obj);
+	}
+
+	return res;
     };
 
     parserfuncs["route"] = function(out, cmd, os) {
@@ -413,6 +567,7 @@
 		    }
 		}
 	    }
+
 	} else if (_.intersection(cmd, ['-r','-n']).length === 2) {
 	    // routing table
 	    res = [];
