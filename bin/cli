@@ -10,10 +10,13 @@ var args = process.argv.slice(2);
 
 if (args && args[0] === "--list") {
     console.log("Supported system commands:");
-    console.log(JSON.stringify(scp.getSupported(), null, 4));
+    console.log(JSON.stringify(scp.getSupportedCmds(), null, 4));
     process.exit(0);
 } else if (args && args[0] === "--os") {
-    console.log(os.platform());
+    console.log(os.platform() + 
+		" [" + 
+		(scp.isOSSupported(os.platform()) ? "supported" : "not supported")
+		+ "]");
     process.exit(0);
 } else if (args[0]) {
     exec(args.join(" "), function (error, stdout, stderr) {
