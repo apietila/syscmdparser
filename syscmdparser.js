@@ -149,12 +149,12 @@
 	    return addr.join(".");
 	}
 
-	var res = { srcfile : cmd[1] };
+	var res = undefined;
 	var lines = (out ? out.trim() : "").split("\n");
 
 	switch (cmd[1]) {
 	case "/etc/resolv.conf":
-	    res.nameservers = [];
+	    res = { nameservers : []};
 	    for (var i = 0; i < lines.length; i++) {
 		if (lines[i].indexOf("#") === 0 || lines[i].length <= 0) 
 		    continue;
@@ -169,7 +169,7 @@
 	    break;
 
 	case "/proc/net/route":
-	    res.routes = [];
+	    res = {};
 	    var h = lines[0].toLowerCase().trim().replace(/\s+/g, ' ').split(' ');
 	    for (var i = 1; i < lines.length; i++) {
 		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
@@ -190,18 +190,18 @@
 			break;
 		    }
 		});
-		res.routes.push(o);
+		res[o.destination] = o;
 	    }
 	    break;
 
 	case "/proc/net/wireless":
-	    res.ifaces = {};
+	    res = {};
 	    for (var i = 0; i < lines.length; i++) {
 		if (lines[i].indexOf("|") >= 0 || lines[i].length <= 0)
 		    continue;
 
 		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
-		res.ifaces[line[0].replace('/:/','')] = {
+		res[line[0].replace('/:/','')] = {
 		    link : parseInt(line[2]),
 		    signal : parseInt(line[3]),
 		    noise : parseInt(line[4]),
@@ -210,13 +210,13 @@
 	    break;
 
 	case "/proc/net/dev":
-	    res.ifaces = {};
+	    res = {};
 	    for (var i = 0; i < lines.length; i++) {
 		if (lines[i].indexOf("|") >= 0 || lines[i].length <= 0)
 		    continue;
 
 		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
-		res.ifaces[line[0].replace('/:/','')] = {
+		res[line[0].replace('/:/','')] = {
 		    rx : {
 			bytes : parseInt(line[1]),
 			packets : parseInt(line[2]), 
@@ -242,6 +242,7 @@
 
 	case "/proc/meminfo":
 	case "/proc/net/snmp6":
+	    res = {};
 	    for (var i = 0; i < lines.length; i++) {
 		if (lines[i].indexOf("#") === 0 || lines[i].length <= 0)
 		    continue;
@@ -252,6 +253,7 @@
 
 	case "/proc/net/netstat":
 	case "/proc/net/snmp":
+	    res = {};
 	    var g = undefined;
 	    var h = undefined;
 	    for (var i = 0; i < lines.length; i++) {
@@ -279,13 +281,6 @@
 	    throw new Error("syscmdparser does not support 'cat " + cmd[1] + "'");
 	}
 	return res;
-    };
-
-    parserfuncs["netsh"] = function(out, cmd, os) {
-	if (os !== winnt)
-	    throw new Error("syscmdparser 'netsh' not available on '" + os + "'");
-
-	// FIXME
     };
 
     parserfuncs["ifconfig"] = function(out, cmd, os) {
@@ -389,11 +384,26 @@
 	return res;
     };
 
+    parserfuncs["netsh"] = function(out, cmd, os) {
+	if (os !== winnt)
+	    throw new Error("syscmdparser 'netsh' not available on '" + os + "'");
+
+	// FIXME
+    };
+
     parserfuncs["ipconfig"] = function(out, cmd, os) {
+	if (os !== winnt)
+	    throw new Error("syscmdparser 'ipconfig' not available on '" + os + "'");
 	// FIXME
     };
 
     parserfuncs["iwconfig"] = function(out, cmd, os) {
+	// FIXME
+    };
+
+    parserfuncs["netcfg"] = function(out, cmd, os) {
+	if (os !== android)
+	    throw new Error("syscmdparser 'netcfg' not available on '" + os + "'");
 	// FIXME
     };
 
@@ -465,7 +475,7 @@
 	    }
 	} else {
 	    // scan results
-	    res = [];
+	    res = {};
 	    var h = lines[0].trim().toLowerCase().replace(/\s+/g, ' ').split(' ');
 	    h.pop();
 	    for (var i = 1; i < lines.length; i++) {
@@ -481,7 +491,7 @@
 			break;
 		    }
 		});
-		res.push(o);
+		res[o.bssid] = o;
 	    }
 	}
 	return res;
@@ -503,20 +513,24 @@
 
 	switch (obj) {
 	case "neigh":
-	    res = [];
+	    res = {};
 	    for (var i = 0; i < lines.length; i++) {
 		var line = lines[i].trim().replace(/\s+/g, ' ').split(' ');
 		if (line.length!==6)
 		    continue
-		res.push({
+		res[line[4]] = {
 		    address : line[0],
 		    iface : line[2],
 		    mac : line[4]
-		});
+		};
 	    }
 	    break;
 
 	case "addr":
+	    if (!_.contains(cmd, "-o")) { 
+		throw new Error("syscmdparser 'ip -o addr show' required");
+	    };
+
 	    res = {};
 	    for (var i = 0; i < lines.length; i++) {
 		var str = lines[i].trim().replace(/\s+/g, ' ');
@@ -602,7 +616,7 @@
     };
 
     parserfuncs["route"] = function(out, cmd, os) {
-	var res = [];
+	var res = {};
 	var lines = (out ? out.trim() : "").split("\n");
 	
 	var h = undefined;
@@ -617,7 +631,7 @@
 		    if (idx < line.length)
 			o[key] = line[idx];
 		});
-		res.push(o);
+		res[o.destination] = o;
 	    } else {
 		h = undefined;
 	    }
@@ -649,9 +663,9 @@
 		}
 	    }
 
-	} else if (_.intersection(cmd, ['-r','-n']).length === 2) {
+	} else if (_.intersection(cmd, ['-r']).length === 1) {
 	    // routing table
-	    res = [];
+	    res = {};
 	    var h = undefined;
 	    for (var i = 0; i < lines.length; i++) {
 		var line = lines[i].trim().toLowerCase().replace(/\s+/g, ' ').split(' ');
@@ -666,7 +680,7 @@
 			if (idx < line.length)
 			    o[key] = line[idx];
 		    });
-		    res.push(o);
+		    res[o.destination] = o;
 		} else {
 		    h = undefined;
 		}
@@ -797,32 +811,32 @@
 
     parserfuncs["arp"] = function(out, cmd, os) {
 	var lines = (out ? out.trim() : "").split("\n");
-	var res = [];
+	var res = {};
 	
 	switch (os) {
 	case linux:
 	case android:
 	    for (var i = 0; i < lines.length; i++) {
 		var line = lines[i].trim().replace(/\s+/g,' ').split(' ');
-		res.push({
+		res[line[3]] = {
 		    hostname : line[0],
 		    address : line[1].replace(/\(|\)/gi,''),
 		    mac : line[3],
 		    type : line[4].replace(/\[|\]/gi,''),
 		    iface : line[6]
-		});
+		};
 	    }
 	    break;
 	case darwin:
 	    for (var i = 0; i < lines.length; i++) {
 		var line = lines[i].trim().replace(/\s+/g,' ').split(' ');
-		res.push({
+		res[line[3]] = {
 		    hostname : line[0],
 		    address : line[1].replace(/\(|\)/gi,''),
 		    mac : line[3],
 		    iface : line[5],
 		    type : line[7].replace(/\[|\]/gi,'')
-		});
+		};
 	    }
 	    break;
 	case winnt: // FIXME
